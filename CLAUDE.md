@@ -94,6 +94,20 @@ visibly DCC-only. Recorded exceptions:
   in `zot.cc`. That one line makes `zot_clock_active()` false and hides every
   Zot display (status light, overview columns, the Ziggurat "hunt you
   nevermore" line); the time/status command shows the floor clock instead.
+- Phase 3a (safe cells, no combat in a safe room) keeps two non-call
+  lines in `fprop.cc` `str_to_fprop()` (`if (str == "dcc_safe") return
+  FPROP_DCC_SAFE;`, a des-name table entry for the appended enum bit). Its
+  other hooks are one-line guarded calls into `dcc-safe.cc`, several in the
+  guarded early-return/`continue` form: `mon_can_move_to_pos`,
+  `handle_monster_move` (step adjust) and the aquatic-flop loop in
+  `_monster_move` (`mon-act.cc`); `monster_habitable_grid`,
+  `_valid_monster_generation_location`, `find_habitable_spot_near`
+  (`mon-place.cc`); `monster::move_to` and `find_home_near_place`
+  (`monster.cc`); `could_harm` (`mon-util.cc`); `_is_valid_foe`
+  (`mon-behv.cc`); `player_fight` (`fight.cc`); `fire_warn_if_impossible`
+  (`throw.cc`); `spell_uselessness_reason` (`spl-util.cc`);
+  `cannot_evoke_item_reason` (`evoke.cc`); the entangle drag (`player.cc`)
+  and the "arrives with you" follow (`spl-transloc.cc`).
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

@@ -97,3 +97,35 @@ Reviewers changed:
   re-announce or warn);
 - CLAUDE.md's isolation rule now allows data-table entries that parallel an
   extended enum and records the `zot_immune()` exception.
+
+## 2026-10-25 — Phase 3a done
+
+Landed: `FPROP_DCC_SAFE` (des KPROP `dcc_safe`) in `dcc-safe.cc`: monsters
+that would attack the player cannot walk onto, be placed on, or be
+translocated onto a safe cell; dlua `dcc.is_safe_cell`,
+`dcc.monster_can_step`, `dcc.monster_can_land`; test vault `dcc_test_safe`.
+User decision (Resolved 9): no combat in a safe room. `could_harm()` refuses
+harm by or to anything on a safe cell; monsters drop foes across the edge
+(`_is_valid_foe()`); the player's melee, fire/throw, harmful spells and
+evocations are refused with an Announcer line.
+Reviewers changed:
+- monsters no longer melee the player across the edge via the raw step
+  (`dcc_adjust_monster_step` cancels such steps; attacks on allies too);
+- a hostile on a safe cell may only head for the way out (cells of the same
+  room strictly closer to the exit, or off the safe cells), walks out on its
+  own, and can never land on another safe cell or room;
+- flopping aquatic monsters respect safe cells; confused moves were already
+  checked through `mon_can_move_to_pos`;
+- "dragged along with you" / "arrives with you" now re-pick a spot outside
+  instead of printing over a refused move;
+- arriving followers queue outside the door (`find_home_near_place()`
+  searches through safe cells);
+- `is_dcc_safe_cell` moved into `dcc-safe.cc`; the lurker hook was removed
+  (`find_newmons_square` already skips safe cells for lurkers);
+- the BEH_CHARMED finding was rejected: `place_monster()` gives BEH_CHARMED
+  no charm, so generation and movement already agree (comment added);
+- smoke: adjacent hostile at the door over AI turns (no HP loss), player
+  refusals, harm checks, drag spots, a turned hostile walking out. The old
+  AI checks read player-relative monster coordinates and gave no energy, so
+  they passed vacuously; fixed, and `dcc_test_safe` is pinned against
+  rotation and mirroring (see discovery.md).

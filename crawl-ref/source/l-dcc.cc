@@ -17,7 +17,10 @@ module "dcc"
 #include "mon-place.h"
 #include "mon-util.h"
 #include "monster.h"
+#include "player.h"
+#include "spl-util.h"
 #include "state.h"
+#include "terrain.h"
 
 //
 // Non-user-accessible bindings (dlua).
@@ -214,6 +217,83 @@ LUAFN(dcc_monster_can_land_lua)
     PLUARET(boolean, monster_habitable_grid(mons, targ));
 }
 
+// The actor at (x, y): the player or a monster, or nullptr.
+static actor *_dcc_actor_at(lua_State *ls, int argx)
+{
+    const coord_def c(luaL_safe_checkint(ls, argx),
+                      luaL_safe_checkint(ls, argx + 1));
+    return in_bounds(c) ? actor_at(c) : nullptr;
+}
+
+/*** Could the actor at (ax, ay) harm the actor at (tx, ty) at all
+ * (could_harm, the check melee, beams, explosions and clouds share)? Raises
+ * an error if either cell is empty.
+ * @tparam int ax
+ * @tparam int ay
+ * @tparam int tx
+ * @tparam int ty
+ * @treturn boolean
+ * @function can_harm
+ */
+LUAFN(dcc_can_harm_lua)
+{
+    const actor *agent = _dcc_actor_at(ls, 1);
+    const actor *target = _dcc_actor_at(ls, 3);
+    if (!agent || !target)
+        return luaL_error(ls, "dcc.can_harm(): no actor there");
+    PLUARET(boolean, could_harm(agent, target));
+}
+
+/*** Would a player melee, fire or throw be refused where the player stands
+ * (a safe cell)? Prints nothing.
+ * @treturn boolean
+ * @function player_attack_refused
+ */
+LUAFN(dcc_player_attack_refused_lua)
+{
+    PLUARET(boolean, dcc_player_attack_refused(true));
+}
+
+/*** Why the player cannot cast the named spell right now, as the cast
+ * would report it (spell_uselessness_reason), or "" if they could.
+ * @tparam string name
+ * @treturn string
+ * @function spell_refusal
+ */
+LUAFN(dcc_spell_refusal_lua)
+{
+    const spell_type spell = spell_by_name(luaL_checkstring(ls, 1));
+    if (spell == SPELL_NO_SPELL)
+        return luaL_error(ls, "dcc.spell_refusal(): no such spell");
+    PLUARET(string, spell_uselessness_reason(spell, true, true, true).c_str());
+}
+
+/*** Pick a spot within radius 3 of the player for the monster at (mx, my),
+ * the way a translocation drags a monster along with the player. Returns
+ * x, y, or nothing if there is no spot it may land on.
+ * @tparam int mx
+ * @tparam int my
+ * @treturn int|nil
+ * @treturn int|nil
+ * @function drag_spot
+ */
+LUAFN(dcc_drag_spot_lua)
+{
+    const actor *act = _dcc_actor_at(ls, 1);
+    if (!act || !act->is_monster())
+        return luaL_error(ls, "dcc.drag_spot(): no monster there");
+    const monster &mons = *act->as_monster();
+    coord_def spot;
+    if (!find_habitable_spot_near(you.pos(), mons.type, 3, spot, 1, &you)
+        || !dcc_respot_near(mons, you.pos(), 3, spot, 1, &you))
+    {
+        return 0;
+    }
+    lua_pushnumber(ls, spot.x);
+    lua_pushnumber(ls, spot.y);
+    return 2;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -228,6 +308,10 @@ static const struct luaL_Reg dcc_dlib[] =
 { "is_safe_cell", dcc_is_safe_cell_lua },
 { "monster_can_step", dcc_monster_can_step_lua },
 { "monster_can_land", dcc_monster_can_land_lua },
+{ "can_harm", dcc_can_harm_lua },
+{ "player_attack_refused", dcc_player_attack_refused_lua },
+{ "spell_refusal", dcc_spell_refusal_lua },
+{ "drag_spot", dcc_drag_spot_lua },
 { nullptr, nullptr }
 };
 

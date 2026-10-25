@@ -20,6 +20,7 @@
 #include "colour.h"
 #include "coordit.h"
 #include "database.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "dgn-overview.h"
 #include "directn.h"
@@ -5929,6 +5930,9 @@ bool could_harm(const actor* agent, const actor* target, bool announce_important
 
     // If we can fire through them, we definitely can't harm them.
     if (shoot_through_actor(agent, target, announce_mundane))
+        return false;
+
+    if (crawl_state.game_is_dcc() && dcc_harm_barred(agent, target, announce_important))
         return false;
 
     // Players in Sanctuaries cannot harm anything.

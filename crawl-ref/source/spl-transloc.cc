@@ -20,6 +20,7 @@
 #include "artefact.h"
 #include "cloud.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "directn.h"
 #include "dungeon.h"
@@ -1275,6 +1276,8 @@ bool hostile_teleport_player(monster* source)
         if (find_habitable_spot_near(you.pos(), source->type, you.current_vision,
                                      source_newpos, 0, &you))
         {
+            if (crawl_state.game_is_dcc() && !dcc_respot_near(*source, you.pos(), you.current_vision, source_newpos, 0, &you))
+                return did_teleport;
             _place_tloc_cloud(source->pos());
             source->move_to(source_newpos, MV_DELIBERATE | MV_TRANSLOCATION, true);
             source->target = you.pos();

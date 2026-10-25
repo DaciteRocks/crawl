@@ -83,7 +83,7 @@ Architecture
   `FPROP_DCC_SAFE` bit in `fprop.h`, set via des `KPROP`, checked in
   `mon_can_move_to_pos` (monsters that would attack you cannot enter) and in
   monster placement. Not Zin's sanctuary (decays, Zin-coupled), not runed doors
-  (become normal once opened).
+  (become normal once opened). No combat inside: Resolved decision 9.
 - **Boxes are not inventory items.** `you.props["dcc_boxes"]` holds a vector
   of tier ints. Opening happens at a kiosk (Lua marker in the safe room vault)
   and drops items on the floor. Reason: no new `OBJ_`/`MISC_` enums, no
@@ -120,7 +120,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 1b | `dcc.cc` module, `dcc` dlua library, smoke script | done 2026-10-25 |
 | 2a | Per-floor clock core and collapse | done 2026-10-25 |
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | done 2026-10-25 |
-| 3a | `FPROP_DCC_SAFE` monster-exclusion property | not started |
+| 3a | `FPROP_DCC_SAFE` monster-exclusion property | done 2026-10-25 |
 | 3b | Safe-room vault on every floor | not started |
 | 4a | Achievement table, hooks, Announcer lines | not started |
 | 4b | Loot boxes and the kiosk | not started |
@@ -408,8 +408,9 @@ Status: done 2026-10-25
 ## Phase 3a — `FPROP_DCC_SAFE` monster-exclusion property
 
 Scope. A cell property that monsters hostile to the player will not enter or
-be placed on. Produces: `FPROP_DCC_SAFE` bit in `source/fprop.h`,
-`is_dcc_safe_cell(coord)` in `fprop.cc`, the des `KPROP` name `dcc_safe`
+be placed on, and inside which there is no combat (Resolved decision 9).
+Produces: `FPROP_DCC_SAFE` bit in `source/fprop.h`, `is_dcc_safe_cell(coord)`
+in `dcc-safe.cc` (with its own `game_is_dcc()` check), the des `KPROP` name `dcc_safe`
 (whatever `str_to_fprop` reads), a guard in `mon-act.cc`
 `mon_can_move_to_pos` (~3277, mirror the sanctuary clause: refuse if target is
 DCC-safe, mover is not, and `!mons->wont_attack()`), a guard in monster
@@ -428,15 +429,25 @@ KPROP section (~1420–1440).
 Gate: Standard gate.
 
 Verification: in wizard mode (`&`) place the test vault with `&L`, summon a
-hostile outside the room, stand inside: it paces the door and does not enter.
+hostile outside the room, stand inside: it does not enter and cannot hurt
+you, even standing in the doorway next to you; you cannot melee, fire, throw
+or cast a harmful spell from inside (the Announcer refuses).
+
+No combat (added 2026-10-25 by the user's decision): `could_harm()` refuses
+any harm by or to an actor on a safe cell (melee, beams, explosions,
+clouds); `_is_valid_foe()` drops foes across the edge; the monster step is
+cancelled when it would melee across it; the player's melee, fire/throw,
+spell and evocation checks refuse with an Announcer line. Hooks and their
+isolation exceptions are listed in `CLAUDE.md`.
 
 Risks. `env.pgrid` bit width: confirm there is a free bit; if `FPROP_` uses all
 32, this needs the next type up and a `tags.cc` touch (then stop and record an
 open question rather than widening). Monsters already inside a safe cell (a
-friendly that turned hostile) must still be able to leave: only check the
-*target* cell.
+friendly that turned hostile) must still be able to leave: they may only move
+toward the way out (cells of the same room strictly closer to it, or off the
+safe cells), and walk out on their own.
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 
@@ -480,7 +491,11 @@ Details.
 Gate: Standard gate.
 
 Verification: start Crawl Live; you begin inside a walled room with a shop
-and a door; descend; you arrive inside another.
+and a door; descend; you arrive inside another. No combat happens inside
+(Phase 3a): monsters following you down the stairs queue outside the door
+and cannot attack you while you stand in the room. The shop and the
+arrival stairs sit on `dcc_safe` cells; the door cell itself may stay
+unsafe (it is the way out for a hostile that ends up inside).
 
 Risks. Vaults containing all three up stairs: the stair fixup may refuse or
 relocate them; `grated_community.des` and similar vaults with stairs are the
@@ -778,6 +793,11 @@ Status: not started
    In portal vaults, the Abyss, Pandemonium, Ziggurats and any other
    non-connected branch it pauses, and it resumes when the player returns to
    a real floor.
+9. (2026-10-25) No combat in a safe room, as in the books. While the player
+   stands on a safe cell they cannot attack (no melee, firing, throwing,
+   harmful spells or evocations; the Announcer refuses), hostile attacks
+   cannot reach them (no melee across the edge, no missiles, spells or
+   breath aimed at them), and allies inside do not fight either.
 
 ## Assumptions (proceeding under)
 

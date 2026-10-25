@@ -18,6 +18,7 @@
 #include "areas.h"
 #include "art-enum.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "directn.h"
 #include "env.h"
 #include "god-conduct.h"
@@ -1320,6 +1321,9 @@ string spell_uselessness_reason(spell_type spell, bool temp, bool prevent,
     // does get called during character creation, so allow it to run for !temp.
     if (temp && (!in_bounds(you.pos()) || !you.on_current_level))
         return "you can't cast spells right now.";
+
+    if (crawl_state.game_is_dcc() && dcc_spell_refused(spell, temp))
+        return dcc_no_combat_reason(false);
 
     if (!skip_casting_checks)
     {

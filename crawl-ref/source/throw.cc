@@ -16,6 +16,7 @@
 #include "chardump.h"
 #include "command.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "describe.h"
 #include "directn.h"
 #include "english.h"
@@ -319,6 +320,9 @@ static shared_ptr<quiver::action> _fire_prompt_for_item()
 // Returns true if warning is given.
 bool fire_warn_if_impossible(bool silent, item_def *weapon)
 {
+    if (crawl_state.game_is_dcc() && dcc_player_attack_refused(silent))
+        return true;
+
     // If you can't wield it, you can't throw it.
     if (!form_can_wield())
     {

@@ -81,3 +81,19 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
 - `crawl.messages(n)` in `-script` mode returns the stored message history,
   so a marker `crawl.mpr()` line lets the smoke check that a step printed
   nothing.
+
+## Phase 3a — safe cells and no combat (2026-10-25)
+
+- `could_harm()` (`mon-util.cc`) is the shared harm check behind melee,
+  beams (`affect_player`, monster hits), clouds, explosions and many spells,
+  and already holds Zin's sanctuary clauses. One guarded line there is the
+  whole damage backstop for "no combat in a safe room"; no `ouch()` hook.
+- `find_newmons_square()` defaults `no_sanctuary` to true, so lurker spots
+  already skip safe cells; `create_monster()` passes "unfriendly" there.
+- dlua monster wrappers' `x`/`y` are relative to the player, not map
+  coordinates; add `you.pos()` back. `m.run_ai()` does nothing unless the
+  monster has action energy (`has_action_energy()`); top it up with
+  `m.add_energy()` first. The first Phase 3a smoke checks read `orc.x/y`
+  directly and passed vacuously; fixed.
+- `dgn.place_map()` may rotate or mirror a vault; a test vault that the
+  smoke reads by fixed coordinates needs `no_rotate no_hmirror no_vmirror`.

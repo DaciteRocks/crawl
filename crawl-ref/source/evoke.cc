@@ -20,6 +20,7 @@
 #include "chardump.h"
 #include "cloud.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "directn.h"
 #include "dungeon.h"
@@ -1094,6 +1095,9 @@ string cannot_evoke_item_reason(const item_def *item, bool temp, bool ident,
     {
         return "You can't produce a sound!";
     }
+
+    if (crawl_state.game_is_dcc() && dcc_evocation_refused(*item, temp))
+        return dcc_no_combat_reason(true);
 
     if (temp && is_xp_evoker(*item) && evoker_charges(item->sub_type) <= 0)
     {

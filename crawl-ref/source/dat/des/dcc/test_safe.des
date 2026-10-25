@@ -11,7 +11,7 @@
 ###############################################################################
 
 NAME:   dcc_test_safe
-TAGS:   dcc_only unrand no_exits
+TAGS:   dcc_only unrand no_exits no_rotate no_hmirror no_vmirror
 WEIGHT: 0
 KPROP:  -@ = dcc_safe
 SUBST:  - = .

@@ -4766,6 +4766,9 @@ bool monster::find_home_near_place(const coord_def &c)
                 continue;
             dist(*ai - c) = last_dist = dist(p - c) + 1;
 
+            if (crawl_state.game_is_dcc() && dcc_home_search_through(*this, *ai, q))
+                continue;
+
             if (!monster_habitable_grid(this, *ai))
                 continue;
 
