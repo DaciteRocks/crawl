@@ -29,3 +29,18 @@ rc `type = dcc` or `-dcc`, and uses the Descent tile. Reviewers changed:
   saves.
 Kept on purpose: DCC is not alpha-gated, the tourney prompt at `newgame.cc:430`
 is untouched, and `dcc` is listed in `-gametypes-json`.
+
+## 2026-10-25 — Phase 1b done
+
+Landed: `source/dcc.h`/`dcc.cc` (`dcc_setup_new_game()`, called from
+`_setup_generic` under `game_is_dcc()`, sets `you.props["dcc_version"] = 1`)
+and `source/l-dcc.cc` (dlua table `dcc` with `is_active()` and
+`enable_for_script()`), registered in `dlua.cc`/`l-libs.h` and listed in
+`Makefile.obj`, `crawl.vcxproj` and its `.filters`. `scripts/dcc_smoke.lua` is
+now the gate's fourth command: it checks the mode, a 12-floor Dungeon, and
+generates D:1, D:6 (each with a down stair) and D:12. A broken check exits 1.
+Discovery: `initialise_branch_depths()` already sets the Descent depth and both
+Descent branch keys for every Descent-type game, so `enable_for_script()` just
+sets the type and calls it; there was nothing extra to factor out.
+Reviewers changed: `dcc.enable_for_script()` now raises a Lua error unless
+`crawl_state.script` or `crawl_state.test` is set (`-script` sets both).

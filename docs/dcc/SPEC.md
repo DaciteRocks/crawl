@@ -117,7 +117,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 |---|-------|--------|
 | 0 | Gate discovery and repo CLAUDE.md | done 2026-10-25 |
 | 1a | `GAME_TYPE_DCC` exists and is selectable | done 2026-10-25 |
-| 1b | `dcc.cc` module, `dcc` dlua library, smoke script | not started |
+| 1b | `dcc.cc` module, `dcc` dlua library, smoke script | done 2026-10-25 |
 | 2a | Per-floor clock core and collapse | not started |
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | not started |
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | not started |
@@ -292,7 +292,7 @@ ASSERTs that a real game never sees (player species unset, etc.). Fix inside
 If `-script` proved unviable in Phase 0, this phase instead creates
 `source/test/dcc.lua` and the gate uses the Debug build's `-test dcc`.
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 
