@@ -178,6 +178,25 @@ static int _added_zot_time()
     return you.time_taken;
 }
 
+/// Zot's touch: lose max HP, note it, interrupt. Also used by the Crawl Live
+/// floor clock (dcc-clock.cc) where a collapsed floor has no floor below.
+void zot_touch_max_hp()
+{
+    // Use your 'base' MHP (excluding forms, berserk, artefacts...)
+    // to calculate loss, so that Dragon Form doesn't penalize extra HP
+    // and players in unskilled talisman forms don't lose less HP.
+    // TODO: also ignore ATTR_DIVINE_VIGOUR.
+    const int mhp = get_real_hp(false, false);
+    // However, use your current hp_max to set the max loss, so that you
+    // can't go below 1 MHP ever.
+    const int loss = min(3 + mhp / 6, you.hp_max - 1);
+    // Take the note before decrementing max HP, so the notes have cause
+    // before effect. Not sure if this should use current or base MHP.
+    take_note(Note(NOTE_ZOT_TOUCHED, you.hp_max, you.hp_max - loss));
+    dec_max_hp(loss);
+    interrupt_activity(activity_interrupt::force);
+}
+
 void incr_zot_clock()
 {
     if (!zot_clock_active())
@@ -191,19 +210,7 @@ void incr_zot_clock()
     if (_zot_clock() >= MAX_ZOT_CLOCK)
     {
         mpr("Zot's power touches on you...");
-        // Use your 'base' MHP (excluding forms, berserk, artefacts...)
-        // to calculate loss, so that Dragon Form doesn't penalize extra HP
-        // and players in unskilled talisman forms don't lose less HP.
-        // TODO: also ignore ATTR_DIVINE_VIGOUR.
-        const int mhp = get_real_hp(false, false);
-        // However, use your current hp_max to set the max loss, so that you
-        // can't go below 1 MHP ever.
-        const int loss = min(3 + mhp / 6, you.hp_max - 1);
-        // Take the note before decrementing max HP, so the notes have cause
-        // before effect. Not sure if this should use current or base MHP.
-        take_note(Note(NOTE_ZOT_TOUCHED, you.hp_max, you.hp_max - loss));
-        dec_max_hp(loss);
-        interrupt_activity(activity_interrupt::force);
+        zot_touch_max_hp();
 
         set_turns_until_zot(you.has_mutation(MUT_SHORT_LIFESPAN) ? 200 : 1000);
     }

@@ -50,3 +50,18 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
      console. It stays optional tooling, run at feature boundaries (after 1b,
      2b, 3b, 4b, 5b). The fallback in Phase 0's Risks (`-test dcc`) is not
      needed.
+
+## Phase 2a — clock and collapse (2026-10-25)
+
+- `is_valid_shaft_level(false)` (`traps.cc`) is the "is there a floor below"
+  test: it is false in Sprint, in non-connected branches and at a branch
+  bottom, and with `false` it ignores `no_shafts` branch flags.
+- A forced descent without the shaft-trap side effects is
+  `floor_transition(DNGN_TRAP_SHAFT, orig_terrain(you.pos()), dest, true,
+  false, true, false)`. `shaft = true` gives the shaft arrival (random spot,
+  and `load_level()` does not treat it as a Descent peek), skips the climb
+  message and travel cache update; `_travel_destination()`, which destroys
+  the trap, prints the shaft lines and marks the milestone, is bypassed.
+- `level_id::describe()` is only unique in connected branches: every Pan level,
+  repeat portals, Zigs and later Abyss trips share keys. Key per-floor state
+  on it only for connected branches, and use `just_created_level` for "new".

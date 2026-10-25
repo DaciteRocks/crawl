@@ -44,3 +44,28 @@ Descent branch keys for every Descent-type game, so `enable_for_script()` just
 sets the type and calls it; there was nothing extra to factor out.
 Reviewers changed: `dcc.enable_for_script()` now raises a Lua error unless
 `crawl_state.script` or `crawl_state.test` is set (`-script` sets both).
+
+## 2026-10-25 — Phase 2a done
+
+Landed: `source/dcc-clock.h`/`dcc-clock.cc`, a per-floor clock (1500 turns on
+D:1-3, 1200 elsewhere) in `you.props`, started from `load_level()` and ticked
+from `player_reacts()`, with dlua helpers and smoke checks. At zero the floor
+collapses: a forced one-floor descent with 20% HP damage, or at a branch
+bottom the Zot-touch max-HP penalty and a 100-turn retry clock.
+User decision (Resolved decision 8): the clock runs only on connected-branch
+floors and pauses in portals, the Abyss, Pan and Zigs.
+Reviewers changed:
+- the hook passes `just_created_level`; a newly created floor always gets a
+  fresh clock (Pan, portals, Zigs and repeat Abyss trips used to reuse old
+  clocks under one `describe()` key). The park table remains for real
+  revisits on connected floors only: it never stores a spent clock and keeps
+  at most 16 entries, so a collapsed floor cannot collapse again on return;
+- the collapse uses `floor_transition()` directly instead of the shaft-trap
+  path (no trap destroyed, no shaft messages, no shaft milestone), and HP
+  loss, `dcc_collapsed_count` and the note apply only after the level has
+  really changed, so a failed fall is penalised once;
+- the Zot-touch penalty is now `zot_touch_max_hp()` in `zot.cc`, shared by
+  both (a pure move, recorded in the CLAUDE.md isolation rule);
+- `dcc.tick()` returns the collapse result, and the smoke checks a collapse,
+  the D:12 no-floor penalty, and the pause in the Abyss and a portal;
+- CLAUDE.md now allows the one `#include "dcc*.h"` a trunk hook needs.

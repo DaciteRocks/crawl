@@ -118,7 +118,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 0 | Gate discovery and repo CLAUDE.md | done 2026-10-25 |
 | 1a | `GAME_TYPE_DCC` exists and is selectable | done 2026-10-25 |
 | 1b | `dcc.cc` module, `dcc` dlua library, smoke script | done 2026-10-25 |
-| 2a | Per-floor clock core and collapse | not started |
+| 2a | Per-floor clock core and collapse | done 2026-10-25 |
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | not started |
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | not started |
 | 3b | Safe-room vault on every floor | not started |
@@ -298,11 +298,14 @@ Status: done 2026-10-25
 
 ## Phase 2a — Per-floor clock core and collapse
 
-Scope. In DCC, entering a new level starts a floor clock (1500 turns on D:1–3,
-1200 elsewhere, stored as auts in `you.props["dcc_floor_aut_left"]`); every
-player turn decrements it by `you.time_taken`; at zero the floor collapses:
-`down_stairs(DNGN_TRAP_SHAFT)` with 20% max-HP damage (min 1, never lethal),
-or at a branch bottom the Zot-touch fallback. No UI yet beyond plain `mpr`
+Scope. In DCC, entering a new connected-branch floor starts a floor clock
+(1500 turns on D:1–3, 1200 elsewhere, stored as auts in
+`you.props["dcc_floor_aut_left"]`); every player turn decrements it by
+`you.time_taken`; at zero the floor collapses: a forced one-floor descent with
+20% max-HP damage (min 1, never lethal), or at a branch bottom the Zot-touch
+fallback. In portal vaults, the Abyss, Pandemonium and Ziggurats (any branch
+that is not `is_connected_branch()`) the clock pauses and resumes on return
+to a real floor (Resolved decision 8). No UI yet beyond plain `mpr`
 messages at entry and collapse. Produces `source/dcc-clock.h/.cc`, hooks in
 `files.cc` (next to `decr_zot_clock()` ~2508) and `player-reacts.cc` (next to
 `incr_zot_clock()` ~1435), dlua `dcc.floor_turns_left()`,
@@ -314,26 +317,31 @@ Budget: ~8 files touched (`dcc-clock.h`, `dcc-clock.cc`, `files.cc`,
 `stairs.h` (`down_stairs` signature), `files.cc` 2240–2270 and ~2500–2515.
 
 Details.
-- `dcc_enter_floor()`: called from the `files.cc` hook only when
-  `game_is_dcc()` and the level is newly entered (same condition the Zot
-  clock uses). Sets the clock from a table keyed on
-  `level_id::current()` (branch + depth). Takes `NOTE_MESSAGE` "Floor clock
-  started: N turns". Guard against the Descent "peek" reload (`files.cc:2255`
-  `descent_peek`): the clock must start once per floor, not once per peek.
-- `dcc_tick_clock()`: no-op unless `game_is_dcc()`; subtract
-  `you.time_taken`; call `dcc_collapse_floor()` when ≤ 0.
-- `dcc_collapse_floor()`: if `you.depth < brdepth[you.where_are_you]` and not
-  in the Abyss: message, `ouch(...)`-free HP loss via `dec_hp(min(you.hp - 1,
-  you.hp_max / 5), false)`, `you.props["dcc_collapsed_count"]++`, note, then
-  `down_stairs(DNGN_TRAP_SHAFT)`. Else apply `3 + get_real_hp(false,false)/6`
-  max-HP loss (as `zot.cc` does) and set the clock to 100 turns.
+- `dcc_enter_floor(just_created)`: called from the `files.cc` hook on every
+  arrival that makes changes, passing `just_created_level` (the Zot clock's
+  condition). Outside connected branches it does nothing (the clock pauses).
+  A newly created floor always gets a fresh clock from the tunables table
+  (`NOTE_MESSAGE` "Floor clock started: N turns"). A floor visited before
+  (Descent stair peek, Hell exit to the Vestibule, Abyss exit onto an older
+  floor) resumes its clock from `you.props["dcc_floor_clocks"]`; a spent
+  clock is never parked, and the table is capped (oldest dropped). The clock
+  starts once per floor, not once per peek.
+- `dcc_tick_clock()`: no-op unless `game_is_dcc()` and in a connected branch;
+  subtract `you.time_taken`; call `dcc_collapse_floor()` when ≤ 0.
+- `dcc_collapse_floor()`: if `is_valid_shaft_level(false)` (connected, not a
+  branch bottom): message, forced `floor_transition()` to `depth + 1` with the
+  shaft arrival (no trap path, no shaft messages or milestone); only once the
+  level has changed: `dec_hp(max(1, hp_max / 5), false)`,
+  `you.props["dcc_collapsed_count"]++`, note. Else (or if the fall did not
+  happen) the shared `zot_touch_max_hp()` from `zot.cc` and a 100-turn
+  retry clock.
 - Smoke: enable DCC, goto D:1, regenerate, call `dcc_enter_floor` indirectly
   is not possible without a level change, so expose `dcc.start_floor_clock()`
   for scripts; assert `floor_turns_left() == 1500`; `dcc.tick(10)`; assert
-  1499; `set_floor_turns_left(0)`; `dcc.tick(10)` must not crash in script
-  mode (collapse may be unable to shaft without a real player; make
-  `dcc_collapse_floor` return early with a message when `crawl_state.script`
-  — document this in a comment).
+  1499. Collapse in script mode skips only the fall itself;
+  `dcc.tick()` returns the collapse result (`fall_skipped`, `no_floor`,
+  `fell`), so the smoke checks a collapse on D:1, the no-floor penalty on
+  D:12, and that the clock is paused in the Abyss and a portal vault.
 
 Gate: Standard gate.
 
@@ -341,13 +349,13 @@ Verification: start a Crawl Live game, note "Floor clock started: 1500
 turns", use `&^T` wizard time-skip or just rest; at zero you fall to D:2
 injured.
 
-Risks. `down_stairs(DNGN_TRAP_SHAFT)` from inside `player_reacts()` may be
+Risks. The collapse `floor_transition()` from inside `player_reacts()` may be
 unsafe mid-turn; if the Descent stair code asserts, defer the collapse to the
 next turn start with a `you.props` flag checked at the top of
 `dcc_tick_clock()`. Shafts in Descent land you without the peek; confirm the
 stairs still crumble on arrival (`DESCENT_STAIRS_KEY` logic).
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 
@@ -766,6 +774,10 @@ Status: not started
 6. The Debug Console `-test` build is optional, not part of the per-phase
    gate; run it every few phases or at feature boundaries.
 7. The floor-3 re-pick is species-only plus kits.
+8. (2026-10-25) The floor clock runs only on connected dungeon-branch floors.
+   In portal vaults, the Abyss, Pandemonium, Ziggurats and any other
+   non-connected branch it pauses, and it resumes when the player returns to
+   a real floor.
 
 ## Assumptions (proceeding under)
 

@@ -72,8 +72,11 @@ LUAFN(dcc_set_floor_turns_left_lua)
 }
 
 /*** Spend aut from the floor clock as a player turn would, collapsing the
- * floor at zero (collapse is skipped in script mode). Script/test only.
+ * floor at zero. Paused outside connected branches. Script/test only.
  * @tparam int aut
+ * @treturn string|nil nil if the clock did not run out; otherwise
+ * "fall_skipped" (a floor below exists; the fall itself is skipped in script
+ * mode), "no_floor" (max-HP penalty, clock restarted) or "fell".
  * @function tick
  */
 LUAFN(dcc_tick_lua)
@@ -81,8 +84,18 @@ LUAFN(dcc_tick_lua)
     const int aut = luaL_safe_checkint(ls, 1);
     if (!_dcc_script_only(ls, "tick"))
         return 0;
-    dcc_tick_clock_by(aut);
-    return 0;
+    switch (dcc_tick_clock_by(aut))
+    {
+    case dcc_collapse_result::fell:
+        PLUARET(string, "fell");
+    case dcc_collapse_result::fall_skipped:
+        PLUARET(string, "fall_skipped");
+    case dcc_collapse_result::no_floor:
+        PLUARET(string, "no_floor");
+    case dcc_collapse_result::none:
+    default:
+        return 0;
+    }
 }
 
 /*** Start a fresh clock for the current floor. Script/test only.
@@ -97,15 +110,18 @@ LUAFN(dcc_start_floor_clock_lua)
 }
 
 /*** Run the level-arrival hook for the current place, as load_level() does
- * on a real arrival: starts a clock on a new floor, resumes a parked one on
- * a floor left earlier. Script/test only.
+ * on a real arrival: starts a clock on a newly created floor, resumes a
+ * parked one on a floor visited before, and pauses the clock outside
+ * connected branches. Script/test only.
+ * @tparam boolean just_created true for a first visit to the level
  * @function enter_floor
  */
 LUAFN(dcc_enter_floor_lua)
 {
+    const bool just_created = lua_toboolean(ls, 1);
     if (!_dcc_script_only(ls, "enter_floor"))
         return 0;
-    dcc_enter_floor();
+    dcc_enter_floor(just_created);
     return 0;
 }
 

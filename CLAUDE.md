@@ -75,8 +75,14 @@ Pitfalls, all verified:
 New behaviour lives in new files: `source/dcc*.cc`, `source/l-dcc.cc`,
 `source/dat/des/dcc/*.des`, `source/dat/dlua/dcc*.lua`,
 `source/scripts/dcc_*.lua`. A trunk file may gain only a one-line call guarded
-by `crawl_state.game_is_dcc()`, an enum member appended before the `NUM_`
-entry, or a `case` in an existing switch. Nothing else. State lives in
+by `crawl_state.game_is_dcc()` (plus the single `#include "dcc*.h"` line that
+call needs; `ng-setup.cc` set the precedent), an enum member appended before
+the `NUM_` entry, or a `case` in an existing switch. Nothing else. The DCC
+callee re-checks `game_is_dcc()` itself; that check is the authoritative one,
+the call-site guard is there so every trunk hook is visibly DCC-only. One
+recorded exception: Phase 2a extracted `zot_touch_max_hp()` in `zot.cc` (a
+pure move of existing code) so the floor clock shares Zot's max-HP penalty
+instead of copying it. State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,
 no `tags.cc` edits. The reason is upstream merges: trunk diffs must stay tiny.
 
