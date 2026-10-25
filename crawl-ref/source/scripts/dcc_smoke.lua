@@ -415,3 +415,101 @@ turncoat.dismiss()
 
 you.moveto(30, 34)
 check(not dcc.player_attack_refused(), "outside the room the player may attack")
+
+-- Phase 3b: a safe-room vault on every connected-branch floor. It holds all
+-- of the floor's up stairs and branch exits, so every arrival lands inside,
+-- plus the Commissary shop and the (inactive) loot box kiosk.
+local room_map = dgn.map_by_name("dcc_safe_room_a")
+check(room_map ~= nil, "the dcc_safe_room_a vault exists")
+check(dgn.has_tag(room_map, "dcc_only"),
+      "the safe room is tagged dcc_only, so no other game type places it")
+check(dgn.has_tag(room_map, "allow_dup"),
+      "the safe room may be placed on every floor (allow_dup)")
+
+-- Every way up: stone up stairs, branch exits and up hatches. The Zot:$
+-- dungeon exit is the way out with the Orb, not an arrival.
+local function ways_up()
+  local ups = {}
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      local name = dgn.feature_name(dgn.grid(x, y))
+      if (name:find("^stone_stairs_up") or name:find("^exit_")
+          or name == "escape_hatch_up")
+         and not (name == "exit_dungeon" and you.branch() == "Zot") then
+        table.insert(ups, { x = x, y = y, name = name })
+      end
+    end
+  end
+  return ups
+end
+
+local function safe_rooms_placed()
+  local _, n = (debug.vault_names() or ""):gsub("dcc_safe_room", "")
+  return n
+end
+
+-- Generates the floor, then checks the room, its contents, every way up,
+-- and where each kind of arrival lands (dcc.arrival_spot() asks the same
+-- dgn_find_nearby_stair() a real arrival uses).
+local function check_safe_room_floor(place, arrivals)
+  debug.goto_place(place)
+  local ok, err = pcall(test.regenerate_level)
+  check(ok, place .. " generates" .. (ok and "" or (": " .. tostring(err))))
+  check(safe_rooms_placed() == 1, place .. " has exactly one safe room")
+
+  local ups = ways_up()
+  check(#ups > 0, place .. " has a way up")
+  for _, u in ipairs(ups) do
+    check(dcc.is_safe_cell(u.x, u.y),
+          place .. ": " .. u.name .. " at " .. u.x .. "," .. u.y
+          .. " is inside the safe room")
+  end
+
+  local shops, kiosks = 0, 0
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      if dcc.is_safe_cell(x, y) then
+        if dgn.feature_name(dgn.grid(x, y)) == "enter_shop" then
+          shops = shops + 1
+        end
+        if dgn.feature_desc_at(x, y, "plain"):find("loot box kiosk", 1, true)
+        then
+          kiosks = kiosks + 1
+        end
+      end
+    end
+  end
+  check(shops == 1, place .. ": the safe room holds the shop")
+  check(kiosks == 1, place .. ": the safe room holds the kiosk")
+
+  for _, how in ipairs(arrivals) do
+    for i = 1, 3 do
+      local x, y = dcc.arrival_spot(how)
+      check(dcc.is_safe_cell(x, y),
+            place .. ": arriving by " .. how .. " lands inside the safe room")
+    end
+  end
+end
+
+local down_ways = { "stairs_i", "stairs_ii", "stairs_iii" }
+check_safe_room_floor("D:1", { "new_game" })
+for d = 2, 12 do
+  check_safe_room_floor("D:" .. d, down_ways)
+end
+-- Branch tops (arrival on the branch exit), branch ends, and the encompass
+-- maps where nothing fits beside the main vault: Vaults:$, the Vestibule of
+-- Hell, and the mostly-water Cocytus end.
+for _, place in ipairs({ "Lair:1", "Orc:1", "Elf:1", "Vaults:1", "Depths:1",
+                         "Zot:1", "Hell", "Coc:1" }) do
+  check_safe_room_floor(place, { "branch" })
+end
+for _, place in ipairs({ "Lair:5", "Orc:2", "Elf:3", "Shoals:4", "Swamp:4",
+                         "Snake:4", "Spider:4", "Slime:5", "Vaults:5",
+                         "Crypt:3", "Depths:4", "Zot:5", "Coc:7", "Dis:7" }) do
+  check_safe_room_floor(place, down_ways)
+end
+
+-- Off the connected branches there is no safe room.
+debug.goto_place("Sewer")
+test.regenerate_level()
+check(safe_rooms_placed() == 0, "a portal vault gets no safe room")

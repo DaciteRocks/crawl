@@ -29,6 +29,7 @@
 #include "directn.h"
 #include "dbg-maps.h"
 #include "dbg-scan.h"
+#include "dcc-room.h"
 #include "dgn-delve.h"
 #include "dgn-height.h"
 #include "dgn-overview.h"
@@ -2889,6 +2890,9 @@ static void _build_dungeon_level()
         _build_overflow_temples();
     }
 
+    if (crawl_state.game_is_dcc())
+        dcc_place_safe_room();
+
     // Try to place minivaults that really badly want to be placed. Still
     // no guarantees, seeing this is a minivault.
     if (crawl_state.game_has_random_floors())
@@ -2930,6 +2934,8 @@ static void _build_dungeon_level()
             throw dgn_veto_exception("Transporter placement failed.");
 
         // Any vault-placement activity must happen before this check.
+        if (crawl_state.game_is_dcc())
+            dcc_fix_safe_room_stairs();
         _dgn_verify_connectivity(nvaults);
 
         _builder_monsters();
@@ -3251,6 +3257,9 @@ static const map_def *_dgn_random_map_for_place(bool minivault)
     if (!vault)
         // Pick a normal map
         vault = random_map_for_place(lid, minivault, false);
+
+    if (!vault && crawl_state.game_is_dcc())
+        vault = dcc_arrival_map(minivault);
 
     if (!vault && lid.branch == root_branch && lid.depth == 1)
         vault = random_map_for_tag("arrival", false, false, false);
@@ -4814,6 +4823,8 @@ static const vault_placement *_build_vault_impl(const map_def *vault,
             throw dgn_veto_exception("Pan map with disconnected zones");
     }
 
+    if (!crawl_state.game_is_dcc() && vault->get_tags_unsorted().count("dcc_only"))
+        throw dgn_veto_exception("Map only for Crawl Live");
     if (crawl_state.game_is_descent() && vault->get_tags_unsorted().count("no_descent"))
         throw dgn_veto_exception("Illegal map for descent");
 

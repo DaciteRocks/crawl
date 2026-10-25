@@ -1,0 +1,98 @@
+###############################################################################
+# safe_rooms.des: Crawl Live (DCC) safe-room vaults.
+#
+# Every connected-branch floor of a Crawl Live game gets exactly one of these
+# (dcc-room.cc places it; on D:1 it is the arrival vault). It holds all of
+# the floor's up stairs, so every arrival lands inside, plus a general shop
+# that charges normal DCSS prices and a placeholder loot box kiosk (K, plain
+# floor for now). Every cell inside the walls is dcc_safe: hostile monsters
+# cannot enter, and there is no combat inside (dcc-safe.cc). The door stays
+# an ordinary cell, the way out for a hostile that ends up inside.
+#
+# Placement relies on these shapes as written: dcc-room.cc reads the map
+# lines to find the one door and digs the room into solid rock with the door
+# opening onto floor, so the maps are never rotated or mirrored. Each variant
+# has its door on a different side. Keep the outer ring all wall except the
+# door, keep exactly one door, and keep every variant's header block the
+# same.
+#
+# Never placed at random: no DEPTH, and dcc_only keeps them out of every
+# other game type (maps.cc, dungeon.cc). allow_dup lets the same variant
+# appear on many floors.
+###############################################################################
+
+# Door to the south.
+NAME:   dcc_safe_room_a
+TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KPROP:  .{([SK = dcc_safe
+MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MAP
+xxxxxxxxx
+x{..S..(x
+x.......x
+x[..K...x
+xxxx+xxxx
+ENDMAP
+
+# Door to the north.
+NAME:   dcc_safe_room_b
+TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KPROP:  .{([SK = dcc_safe
+MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MAP
+xxxx+xxxx
+x.......x
+x{.K.S.(x
+x...[...x
+xxxxxxxxx
+ENDMAP
+
+# Door to the east.
+NAME:   dcc_safe_room_c
+TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KPROP:  .{([SK = dcc_safe
+MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MAP
+xxxxxxx
+x{...Sx
+x.....x
+x(.K..+
+x.....x
+x[....x
+xxxxxxx
+ENDMAP
+
+# Door to the west.
+NAME:   dcc_safe_room_d
+TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KPROP:  .{([SK = dcc_safe
+MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MAP
+xxxxxxx
+xS...{x
+x.....x
++..K.(x
+x.....x
+x....[x
+xxxxxxx
+ENDMAP

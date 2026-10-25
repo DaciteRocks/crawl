@@ -902,6 +902,8 @@ static bool _is_extra_compatible(maybe_bool want_extra, bool have_extra)
 
 bool map_selector::accept(const map_def &mapdef) const
 {
+    if (!crawl_state.game_is_dcc() && mapdef.has_tag("dcc_only"))
+        return false;
     if (crawl_state.game_is_descent() && mapdef.has_tag("no_descent"))
         return false;
 
