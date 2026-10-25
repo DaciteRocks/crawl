@@ -300,6 +300,7 @@ void init_dungeon_lua()
     dluaopen_monsters(dlua);
     dluaopen_you(dlua);
     dluaopen_dgn(dlua);
+    dluaopen_dcc(dlua);
     #ifdef WIZARD
     dluaopen_wiz(dlua);
     #endif

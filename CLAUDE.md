@@ -17,8 +17,10 @@ cd "$SRC" && ./crawl.exe -builddb -reset-cache
 cd "$SRC" && ./crawl.exe -script dcc_smoke.lua
 ```
 
-- The last line exists from Phase 1b on. Before then, the script check is
-  `./crawl.exe -script genlevel.lua D:1` (writes `dump-D-1.map`; delete it).
+- The last line runs `source/scripts/dcc_smoke.lua` (added in Phase 1b). Each
+  phase appends its checks there; every check `error()`s on failure, so a
+  failing check exits 1. New `.cc` files go in `source/Makefile.obj` and in
+  `source/MSVC/crawl.vcxproj` (plus `crawl.vcxproj.filters`).
 - Use the VS 18 Insiders MSBuild exactly as above. Do NOT use VS2022; its C++
   install on this machine is broken (details in
   `docs/dcc/spec-history/discovery.md`).
