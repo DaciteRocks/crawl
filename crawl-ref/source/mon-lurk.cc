@@ -9,6 +9,7 @@
 
 #include "act-iter.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "defines.h"
 #include "env.h"
 #include "fixedarray.h"
@@ -97,6 +98,9 @@ static bool _try_to_place_lurker(lurker_data& lurker)
                                          2, 5);
 
     if (spot.origin())
+        return false;
+
+    if (crawl_state.game_is_dcc() && is_dcc_safe_cell(spot))
         return false;
 
     monster* real_mon = lurker.mon.place();

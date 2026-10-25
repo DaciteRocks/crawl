@@ -209,3 +209,92 @@ check(dcc.floor_turns_left() == 100 and dcc.floor_turns_total() == 100,
 mark()
 dcc.tick(600)
 check(quiet(), "the resumed retry clock gives no drop warnings")
+
+-- Phase 3a: the dcc_safe cell property (FPROP_DCC_SAFE). The test vault is
+-- a 5x5 safe room (x 28..32, y 28..32) centred on (30, 30), with an open
+-- door at (30, 33) and a ring of plain, unsafe floor around it (y 34 is the
+-- row below the door).
+dgn.reset_level()
+local safe_map = dgn.map_by_name("dcc_test_safe")
+check(safe_map ~= nil, "the dcc_test_safe vault exists")
+dgn.with_map_anchors(30, 30, function()
+  return dgn.place_map(safe_map, true, true, 30, 30)
+end)
+check(dgn.grid(31, 31) == dgn.find_feature_number("floor"),
+      "dcc_test_safe is placed at (30, 30)")
+check(dcc.is_safe_cell(31, 31), "an interior cell of the room is safe")
+check(dcc.is_safe_cell(28, 28) and dcc.is_safe_cell(32, 32),
+      "the room's corner cells are safe")
+check(dgn.fprop_at(31, 31, "dcc_safe"), "KPROP dcc_safe sets the property")
+check(not dcc.is_safe_cell(30, 33), "the doorway is not safe")
+check(not dcc.is_safe_cell(30, 34), "the floor outside the room is not safe")
+check(not dcc.is_safe_cell(27, 27), "the room's wall is not safe")
+check(not dcc.is_safe_cell(-1, -1), "out of bounds is not safe")
+
+you.moveto(30, 30)
+
+-- Placement: hostiles are refused on safe cells, allies are not.
+check(dgn.create_monster(31, 31, "orc") == nil,
+      "a hostile monster cannot be placed on a safe cell")
+local ally = dgn.create_monster(29, 29, "orc att:friendly")
+check(ally ~= nil, "an ally can be placed on a safe cell")
+check(dcc.monster_can_step(29, 29, 29, 28),
+      "an ally can walk about inside the safe room")
+check(dcc.monster_can_land(29, 29, 32, 32),
+      "an ally can land anywhere in the safe room")
+
+-- A hostile in the doorway can neither walk nor be moved into the room.
+local orc = dgn.create_monster(30, 33, "generate_awake orc")
+check(orc ~= nil, "a hostile monster can stand in the doorway")
+check(not dcc.monster_can_step(30, 33, 30, 32),
+      "the hostile cannot step into the safe room")
+check(not dcc.monster_can_step(30, 33, 31, 32),
+      "the hostile cannot step diagonally into the safe room")
+check(dcc.monster_can_step(30, 33, 30, 34),
+      "the hostile can still step back outside")
+check(not dcc.monster_can_land(30, 33, 31, 31),
+      "the hostile cannot blink, teleport or be pushed into the room")
+check(dcc.monster_can_land(30, 33, 31, 34),
+      "the hostile can land outside the room")
+
+-- A hostile already on a safe cell (an ally that turned) is not trapped: it
+-- may leave, and move between safe cells, while a hostile outside may not
+-- step onto those cells.
+local turned = dgn.create_monster(32, 34, "orc")
+check(turned ~= nil, "a second hostile stands outside the room")
+dgn.fprop_changed(32, 34, "dcc_safe")
+dgn.fprop_changed(31, 34, "dcc_safe")
+check(dcc.is_safe_cell(32, 34) and dcc.is_safe_cell(31, 34),
+      "two outside cells are made safe under the second hostile")
+check(dcc.monster_can_step(32, 34, 33, 34),
+      "a hostile on a safe cell can leave it")
+check(dcc.monster_can_step(32, 34, 31, 34),
+      "a hostile on a safe cell can move to another safe cell")
+check(not dcc.monster_can_step(30, 33, 31, 34),
+      "a hostile off the safe cells still cannot step onto one")
+dgn.fprop_changed(32, 34, "dcc_safe")
+dgn.fprop_changed(31, 34, "dcc_safe")
+check(not dcc.is_safe_cell(32, 34) and not dcc.is_safe_cell(31, 34),
+      "fprop_changed toggles the property back off")
+turned.dismiss()
+
+-- Live behaviour: with the player inside, the hostile's own AI never takes
+-- it into the room, and random teleports never land it there.
+for i = 1, 10 do
+  orc.run_ai()
+  check(not dcc.is_safe_cell(orc.x, orc.y),
+        "the hostile's AI keeps it out of the safe room (turn " .. i .. ")")
+end
+local spots = {}
+local nspots = 0
+for i = 1, 20 do
+  orc.random_teleport()
+  check(not dcc.is_safe_cell(orc.x, orc.y),
+        "a random teleport does not land the hostile in the room (" .. i .. ")")
+  local key = orc.x .. "," .. orc.y
+  if not spots[key] then
+    spots[key] = true
+    nspots = nspots + 1
+  end
+end
+check(nspots > 1, "the random teleports really moved the hostile")

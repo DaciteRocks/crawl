@@ -40,6 +40,8 @@ enum feature_property_type
     // Don't reveal this tiles when fully mapping a branch on entry
     FPROP_NO_AUTOMAP    = (1 << 22),
     FPROP_MIMIC         = (1 << 23),
+    // Crawl Live safe room: monsters that would attack you cannot enter.
+    FPROP_DCC_SAFE      = (1 << 24),
 };
 DEF_BITFIELD(terrain_property_t, feature_property_type);
 
@@ -49,3 +51,4 @@ bool is_tide_immune(const coord_def &p);
 feature_property_type str_to_fprop(const string &str);
 bool is_icecovered(const coord_def& p);
 bool is_blasphemy(const coord_def& p);
+bool is_dcc_safe_cell(const coord_def& p);

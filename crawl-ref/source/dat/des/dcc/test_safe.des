@@ -1,0 +1,28 @@
+###############################################################################
+# test_safe.des: Crawl Live (DCC) test vault for the dcc_safe cell property.
+#
+# Never placed by the level builder (unrand, WEIGHT 0); the smoke script
+# (scripts/dcc_smoke.lua) and wizard mode (&L) place it by name.
+#
+# A 5x5 safe room ('-' cells, dcc_safe) with an open door, inside a ring of
+# plain floor that is NOT safe, so a monster can stand right outside.
+# KPROP runs before the SUBST, so only the room's cells get the property.
+# The anchor '@' is the room's centre.
+###############################################################################
+
+NAME:   dcc_test_safe
+TAGS:   dcc_only unrand no_exits
+WEIGHT: 0
+KPROP:  -@ = dcc_safe
+SUBST:  - = .
+MAP
+.........
+.xxxxxxx.
+.x-----x.
+.x-----x.
+.x--@--x.
+.x-----x.
+.x-----x.
+.xxx'xxx.
+.........
+ENDMAP

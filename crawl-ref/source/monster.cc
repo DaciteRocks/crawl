@@ -24,6 +24,7 @@
 #include "coordit.h"
 #include "corpse.h"
 #include "database.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "dgn-event.h"
 #include "dgn-overview.h"
@@ -5477,6 +5478,9 @@ void monster::self_destruct()
  */
 bool monster::move_to(const coord_def& newpos, movement_type mvflags, bool defer_finalisation)
 {
+    if (crawl_state.game_is_dcc() && dcc_translocation_barred(*this, newpos, mvflags))
+        return false;
+
     actor* a = actor_at(newpos);
     if (a
         // When doing manual mgrid updating, assume ovelaps with other monsters are expected.

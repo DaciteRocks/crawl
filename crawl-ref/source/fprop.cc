@@ -37,6 +37,11 @@ bool is_blasphemy(const coord_def& p)
     return testbits(env.pgrid(p), FPROP_BLASPHEMY);
 }
 
+bool is_dcc_safe_cell(const coord_def& p)
+{
+    return map_bounds(p) && testbits(env.pgrid(p), FPROP_DCC_SAFE);
+}
+
 bool is_tide_immune(const coord_def &p)
 {
     return bool(env.pgrid(p) & FPROP_NO_TIDE);
@@ -58,6 +63,8 @@ feature_property_type str_to_fprop(const string &str)
         return FPROP_NO_JIYVA;
     if (str == "no_automap")
         return FPROP_NO_AUTOMAP;
+    if (str == "dcc_safe")
+        return FPROP_DCC_SAFE;
 
     return FPROP_NONE;
 }

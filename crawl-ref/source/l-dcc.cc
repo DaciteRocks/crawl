@@ -11,6 +11,12 @@ module "dcc"
 #include "cluautil.h"
 #include "dcc.h"
 #include "dcc-clock.h"
+#include "dcc-safe.h"
+#include "coord.h"
+#include "mon-act.h"
+#include "mon-place.h"
+#include "mon-util.h"
+#include "monster.h"
 #include "state.h"
 
 //
@@ -144,6 +150,70 @@ LUAFN(dcc_enter_floor_lua)
     return 0;
 }
 
+/*** Is this cell a Crawl Live safe cell (FPROP_DCC_SAFE)? False out of
+ * bounds.
+ * @tparam int x
+ * @tparam int y
+ * @treturn boolean
+ * @function is_safe_cell
+ */
+LUAFN(dcc_is_safe_cell_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    PLUARET(boolean, is_dcc_safe_cell(c));
+}
+
+// The monster at (mx, my) and the target (tx, ty) for the two checks below.
+static monster *_dcc_mons_and_target(lua_State *ls, coord_def &targ)
+{
+    const coord_def from(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    targ = coord_def(luaL_safe_checkint(ls, 3), luaL_safe_checkint(ls, 4));
+    if (!in_bounds(from))
+        return nullptr;
+    return monster_at(from);
+}
+
+/*** May the monster at (mx, my) step to the adjacent cell (tx, ty), as its
+ * own move or melee attack (mon_can_move_to_pos)? Raises an error if there
+ * is no monster or the cells are not adjacent.
+ * @tparam int mx
+ * @tparam int my
+ * @tparam int tx
+ * @tparam int ty
+ * @treturn boolean
+ * @function monster_can_step
+ */
+LUAFN(dcc_monster_can_step_lua)
+{
+    coord_def targ;
+    const monster *mons = _dcc_mons_and_target(ls, targ);
+    if (!mons)
+        return luaL_error(ls, "dcc.monster_can_step(): no monster there");
+    const coord_def delta = targ - mons->pos();
+    if (delta.rdist() != 1)
+        return luaL_error(ls, "dcc.monster_can_step(): target not adjacent");
+    PLUARET(boolean, mon_can_move_to_pos(mons, delta));
+}
+
+/*** Could the monster at (mx, my) end up on (tx, ty) at all: the check that
+ * blink, teleport, knockback, pulls, swaps and monster pathfinding share
+ * (monster_habitable_grid). Raises an error if there is no monster.
+ * @tparam int mx
+ * @tparam int my
+ * @tparam int tx
+ * @tparam int ty
+ * @treturn boolean
+ * @function monster_can_land
+ */
+LUAFN(dcc_monster_can_land_lua)
+{
+    coord_def targ;
+    const monster *mons = _dcc_mons_and_target(ls, targ);
+    if (!mons)
+        return luaL_error(ls, "dcc.monster_can_land(): no monster there");
+    PLUARET(boolean, monster_habitable_grid(mons, targ));
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -155,6 +225,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "tick", dcc_tick_lua },
 { "start_floor_clock", dcc_start_floor_clock_lua },
 { "enter_floor", dcc_enter_floor_lua },
+{ "is_safe_cell", dcc_is_safe_cell_lua },
+{ "monster_can_step", dcc_monster_can_step_lua },
+{ "monster_can_land", dcc_monster_can_land_lua },
 { nullptr, nullptr }
 };
 
