@@ -119,7 +119,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 1a | `GAME_TYPE_DCC` exists and is selectable | done 2026-10-25 |
 | 1b | `dcc.cc` module, `dcc` dlua library, smoke script | done 2026-10-25 |
 | 2a | Per-floor clock core and collapse | done 2026-10-25 |
-| 2b | Clock surface: status light, Announcer channel, Zot clock off | not started |
+| 2b | Clock surface: status light, Announcer channel, Zot clock off | done 2026-10-25 |
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | not started |
 | 3b | Safe-room vault on every floor | not started |
 | 4a | Achievement table, hooks, Announcer lines | not started |
@@ -401,7 +401,7 @@ two lists disagree — that is the point. Status order list may be an array
 with a fixed size; follow whatever `STATUS_GEM` did when it was added
 (`git log -S STATUS_GEM -- source/status.cc`).
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 

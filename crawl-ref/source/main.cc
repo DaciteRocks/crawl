@@ -50,6 +50,7 @@
 #include "database.h"
 #include "dbg-scan.h"
 #include "dbg-util.h"
+#include "dcc-clock.h" // dcc_floor_clock_summary
 #include "delay.h"
 #include "describe-god.h"
 #include "describe.h"
@@ -1806,7 +1807,9 @@ static void _experience_check()
 
     if (!crawl_state.game_is_sprint())
     {
-        if (zot_immune())
+        if (crawl_state.game_is_dcc())
+            msg::stream << dcc_floor_clock_summary();
+        else if (zot_immune())
             msg::stream << "You are forever immune to Zot's power.";
         else if (player_in_branch(BRANCH_ABYSS))
             msg::stream << "You have unlimited time to explore this branch.";

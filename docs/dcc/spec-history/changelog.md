@@ -69,3 +69,31 @@ Reviewers changed:
 - `dcc.tick()` returns the collapse result, and the smoke checks a collapse,
   the D:12 no-floor penalty, and the pause in the Abyss and a portal;
 - CLAUDE.md now allows the one `#include "dcc*.h"` a trunk hook needs.
+
+## 2026-10-25 — Phase 2b done
+
+Landed: the "Floor (N)" status light (`STATUS_DCC_FLOOR`, coloured by the
+share of the clock left, DARKGREY "paused" off the connected branches), the
+Announcer channel `MSGCH_DCC` (rc name `dcc`, LIGHTCYAN) with `dcc_announce()`
+warnings at 50%, 25%, 10%, 50, 20 and 10 turns left and on collapse, the Zot
+clock off in DCC, and dlua `dcc.floor_turns_total()` /
+`dcc.floor_clock_paused()`.
+Reviewers changed:
+- the clock's full length is stored in `dcc_floor_aut_total` wherever the
+  clock is set (start, resume, retry; parked entries keep it too) instead of
+  being re-parsed from the place each turn; older saves derive it;
+- a `dcc_floor_retry` flag marks the branch-bottom retry clock: no drop
+  warnings on it, the light is RED (LIGHTMAGENTA for the last 10 turns), and
+  the no-floor Announcer line is said once, not every 100 turns. A parked
+  retry clock stays one on return;
+- the collapse line is announced only after the fall really happened;
+- the Zot clock is off through a guarded early return in `zot_immune()`
+  (replacing the inline condition in `_zot_clock_active_in`), which also
+  hides the overview's Zot columns and the Ziggurat "hunt you nevermore"
+  line; the time/status command shows the floor clock instead of Zot;
+- the running clock now sets `short_text`, so it appears in the character
+  screen and dump status lists;
+- smoke gained negative checks (a quiet tick says nothing; retries do not
+  re-announce or warn);
+- CLAUDE.md's isolation rule now allows data-table entries that parallel an
+  extended enum and records the `zot_immune()` exception.

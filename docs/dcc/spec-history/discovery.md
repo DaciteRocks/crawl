@@ -65,3 +65,19 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
 - `level_id::describe()` is only unique in connected branches: every Pan level,
   repeat portals, Zigs and later Abyss trips share keys. Key per-floor state
   on it only for connected branches, and use `just_created_level` for "new".
+
+## Phase 2b — clock surface (2026-10-25)
+
+- `zot_immune()` (`zot.cc`) is used in exactly four places: `zot.cc`'s
+  `_zot_clock_active_in`, the overview's `show_zot` (`dgn-overview.cc`), the
+  Ziggurat exit line (`stairs.cc`) and the time/status command (`main.cc`).
+  Making it return true in DCC switches every Zot display off with one guarded
+  line; the spec's original `_zot_clock_active_in` condition missed the
+  overview and the time/status command. `main.cc` needs its own guarded
+  branch ahead of the `zot_immune()` test, or it would print "You are forever
+  immune to Zot's power".
+- `zot_touch_max_hp()` prints nothing itself (note, `dec_max_hp`, interrupt),
+  so a quiet no-floor retry still prints one short line of its own.
+- `crawl.messages(n)` in `-script` mode returns the stored message history,
+  so a marker `crawl.mpr()` line lets the smoke check that a step printed
+  nothing.
