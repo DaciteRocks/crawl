@@ -234,6 +234,7 @@ static map<string, game_type> _game_modes()
     };
     if (Version::ReleaseType == VER_ALPHA)
         modes["descent"] = GAME_TYPE_DESCENT;
+    modes["dcc"] = GAME_TYPE_DCC;
     return modes;
 }
 #endif
@@ -1276,6 +1277,8 @@ string gametype_to_str(game_type type)
         return "hints";
     case GAME_TYPE_DESCENT:
         return "descent";
+    case GAME_TYPE_DCC:
+        return "dcc";
     default:
         return "none";
     }
@@ -4855,6 +4858,7 @@ enum commandline_option_type
     CLO_GAMETYPES_JSON,
     CLO_EDIT_BONES,
     CLO_DESCENT,
+    CLO_DCC,
 #if defined(UNIX) || defined(USE_TILE_LOCAL)
     CLO_HEADLESS,
 #endif
@@ -4910,7 +4914,7 @@ static const char *cmd_ops[] =
     "print-charset", "tutorial", "wizard", "explore", "no-save",
     "no-player-bones", "gdb", "no-gdb", "nogdb", "throttle", "no-throttle",
     "lua-max-memory", "playable-json", "branches-json", "save-json",
-    "gametypes-json", "bones", "descent",
+    "gametypes-json", "bones", "descent", "dcc",
 #if defined(UNIX) || defined(USE_TILE_LOCAL)
     "headless",
 #endif
@@ -5646,6 +5650,8 @@ static string _gametype_to_clo(game_type g)
         return cmd_ops[CLO_SPRINT];
     case GAME_TYPE_DESCENT: // no CLO?
         return cmd_ops[CLO_DESCENT];
+    case GAME_TYPE_DCC:
+        return cmd_ops[CLO_DCC];
     case GAME_TYPE_HINTS: // no CLO?
     case GAME_TYPE_NORMAL:
     default:
@@ -6189,6 +6195,11 @@ bool parse_args(int argc, char **argv, bool rc_only)
         case CLO_DESCENT:
             if (!rc_only)
                 Options.game.type = GAME_TYPE_DESCENT;
+            break;
+
+        case CLO_DCC:
+            if (!rc_only)
+                Options.game.type = GAME_TYPE_DCC;
             break;
 
         case CLO_SPRINT_MAP:
