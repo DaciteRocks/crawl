@@ -26,10 +26,17 @@ LUAFN(dcc_is_active)
 }
 
 /*** Make the current script session a DCC game, with the setup level
- * generation needs. For headless scripts and tests only.
+ * generation needs. For headless scripts and tests only: raises an error in
+ * a live game, where it would change the game type and branch layout.
  * @function enable_for_script
  */
-LUAWRAP(dcc_enable_for_script_lua, dcc_enable_for_script())
+LUAFN(dcc_enable_for_script_lua)
+{
+    if (!crawl_state.script && !crawl_state.test)
+        return luaL_error(ls, "dcc.enable_for_script() is for -script/-test only");
+    dcc_enable_for_script();
+    return 0;
+}
 
 static const struct luaL_Reg dcc_dlib[] =
 {
