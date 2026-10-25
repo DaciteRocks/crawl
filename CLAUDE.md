@@ -101,13 +101,14 @@ visibly DCC-only. Recorded exceptions:
   guarded early-return/`continue` form: `mon_can_move_to_pos`,
   `handle_monster_move` (step adjust) and the aquatic-flop loop in
   `_monster_move` (`mon-act.cc`); `monster_habitable_grid`,
-  `_valid_monster_generation_location`, `find_habitable_spot_near`
-  (`mon-place.cc`); `monster::move_to` and `find_home_near_place`
-  (`monster.cc`); `could_harm` (`mon-util.cc`); `_is_valid_foe`
-  (`mon-behv.cc`); `player_fight` (`fight.cc`); `fire_warn_if_impossible`
-  (`throw.cc`); `spell_uselessness_reason` (`spl-util.cc`);
-  `cannot_evoke_item_reason` (`evoke.cc`); the entangle drag (`player.cc`)
-  and the "arrives with you" follow (`spl-transloc.cc`).
+  `_valid_monster_generation_location`, `create_monster` (`mon-place.cc`);
+  the two lurker spots (`mon-lurk.cc`); `monster::move_to` and
+  `find_home_near_place` (`monster.cc`); `could_harm` (`mon-util.cc`);
+  `_is_valid_foe` (`mon-behv.cc`); `melee_action::trigger` (`quiver.cc`);
+  `player_fight` (`fight.cc`); `fire_warn_if_impossible` (`throw.cc`);
+  `spell_uselessness_reason` (`spl-util.cc`); `cannot_evoke_item_reason`
+  (`evoke.cc`); `cannot_read_item_reason` (`item-name.cc`); the entangle
+  drag (`player.cc`) and the "arrives with you" follow (`spl-transloc.cc`).
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

@@ -336,6 +336,10 @@ check(dcc.spell_refusal("Magic Dart"):find("safe room") ~= nil,
       "a harmful spell is refused inside")
 check(dcc.spell_refusal("Blink"):find("safe room") == nil,
       "a harmless spell is not refused inside")
+check(dcc.spell_refusal("Apportation"):find("safe room") == nil,
+      "Apportation (aimed at an item) is not refused inside")
+check(not dcc.melee_takes_turn(30, 33),
+      "a refused melee takes no turn, even with the turn already marked over")
 local hp = you.hp()
 for i = 1, 10 do
   act(guard)
@@ -347,12 +351,40 @@ end
 
 -- A monster dragged along with the player lands outside the room.
 for i = 1, 10 do
-  local x, y = dcc.drag_spot(mpos(guard))
+  local x, y = dcc.spot_near_you(mpos(guard))
   check(x ~= nil, "a hostile dragged along with the player finds a spot (" .. i .. ")")
   check(not dcc.is_safe_cell(x, y),
         "a hostile dragged along with the player lands outside (" .. i .. ")")
 end
 guard.dismiss()
+
+-- Allies may land inside (recall, summons); hostile summons appear outside.
+local ally_inside = false
+for i = 1, 20 do
+  local x, y = dcc.spot_near_you(29, 29)
+  if x and dcc.is_safe_cell(x, y) then
+    ally_inside = true
+  end
+end
+check(ally_inside, "an ally recalled to the player may land in the safe room")
+local summoned_inside = false
+for i = 1, 20 do
+  local x, y = dcc.summon_near_you("orc", false)
+  if x and dcc.is_safe_cell(x, y) then
+    summoned_inside = true
+  end
+end
+check(summoned_inside, "a friendly summon may appear in the safe room")
+local hostile_placed = false
+for i = 1, 10 do
+  local x, y = dcc.summon_near_you("orc", true)
+  if x then
+    hostile_placed = true
+    check(not dcc.is_safe_cell(x, y),
+          "a hostile summon appears outside the safe room (" .. i .. ")")
+  end
+end
+check(hostile_placed, "hostile summons near the room find a spot outside")
 
 -- An ally deep in the room turns hostile: it heads straight for the way
 -- out, never deeper, and never hurts the player on the way.

@@ -3236,6 +3236,8 @@ monster* create_monster(mgen_data mg, bool fail_msg)
                                         ? mg.summoner
                                         : nullptr,
                                       unfriendly || mons_is_tentacle_segment(montype));
+        if (crawl_state.game_is_dcc())
+            dcc_respot_new_monster(mg, montype);
     }
 
     if (in_bounds(mg.pos))
@@ -3295,9 +3297,6 @@ bool find_habitable_spot_near(const coord_def& where, monster_type mon_type,
             continue;
 
         if (no_sanctuary && is_sanctuary(*ri))
-            continue;
-
-        if (no_sanctuary && crawl_state.game_is_dcc() && is_dcc_safe_cell(*ri))
             continue;
 
         if (one_chance_in(++good_count))

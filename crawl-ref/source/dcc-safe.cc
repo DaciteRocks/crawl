@@ -26,10 +26,12 @@
  *    placement, wander targets and monster pathfinding all refuse safe cells;
  *  - _valid_monster_generation_location() (mon-place.cc): every new monster,
  *    random spawns, vault monsters, band members and summons;
- *  - find_habitable_spot_near() (mon-place.cc): searches made for a hostile
- *    (its no_sanctuary flag: unfriendly summons, lurkers) skip safe cells;
- *  - player.cc and spl-transloc.cc: monsters dragged along with the player
- *    get a spot outside instead of a refused one;
+ *  - create_monster() (mon-place.cc) and the lurker spots (mon-lurk.cc): a
+ *    hostile whose spot search picked a safe cell looks again outside. The
+ *    trunk spot finders themselves do not skip safe cells, so allies
+ *    (summons, recall, companions) may still land inside;
+ *  - player.cc and spl-transloc.cc: a hostile dragged along with the player
+ *    gets a spot outside instead of a refused one;
  *  - monster::move_to() (monster.cc): translocations whose destination was
  *    picked by monster class rather than by this monster, a backstop;
  *  - monster::find_home_near_place() (monster.cc): arriving followers queue
@@ -37,10 +39,18 @@
  *  - could_harm() (mon-util.cc): the harm backstop for melee, beams,
  *    explosions and clouds;
  *  - _is_valid_foe() (mon-behv.cc): monster targeting;
- *  - player_fight() (fight.cc), fire_warn_if_impossible() (throw.cc),
- *    spell_uselessness_reason() (spl-util.cc), cannot_evoke_item_reason()
- *    (evoke.cc): the player's refusals.
+ *  - melee_action::trigger() (quiver.cc), player_fight() (fight.cc),
+ *    fire_warn_if_impossible() (throw.cc), spell_uselessness_reason()
+ *    (spl-util.cc), cannot_evoke_item_reason() (evoke.cc),
+ *    cannot_read_item_reason() (item-name.cc): the player's refusals. None
+ *    of them costs a turn or uses up the item.
  * Each callee re-checks game_is_dcc() itself.
+ *
+ * Standing on a safe cell disables the launcher and throwable quiver
+ * entries (fire_warn_if_impossible() is their is_enabled() check); that is
+ * intended. Their is_enabled() checks call it silently, and the Announcer
+ * line is printed only when the player actually tries to fire or throw, so
+ * cycling the quiver does not spam it.
 **/
 
 #include "AppHdr.h"
@@ -49,12 +59,16 @@
 
 #include <map>
 
+#include "areas.h"
 #include "beh-type.h"
 #include "coord.h"
 #include "coordit.h"
 #include "env.h"
+#include "fprop.h"
 #include "item-def.h"
+#include "item-name.h"
 #include "item-prop-enum.h"
+#include "losglobal.h"
 #include "message.h"
 #include "mgen-data.h"
 #include "mon-act.h"
@@ -288,6 +302,51 @@ void dcc_adjust_monster_step(monster &mon, coord_def &mmov)
         mmov.reset();
 }
 
+// find_habitable_spot_near() (mon-place.cc) for a hostile: the same
+// search, also skipping safe cells and sanctuary.
+static bool _find_spot_outside(const coord_def &where, monster_type mon_type,
+                               int radius, coord_def &result,
+                               int exclude_radius, const actor *in_sight_of)
+{
+    int good_count = 0;
+    for (radius_iterator ri(where, radius, C_SQUARE, exclude_radius >= 0);
+         ri; ++ri)
+    {
+        if (exclude_radius > 0 && grid_distance(where, *ri) <= exclude_radius)
+            continue;
+        if (actor_at(*ri)
+            || !cell_see_cell(where, *ri, LOS_NO_TRANS)
+            || !monster_habitable_grid(mon_type, *ri)
+            || in_sight_of && !in_sight_of->see_cell_no_trans(*ri)
+            || is_sanctuary(*ri)
+            || is_dcc_safe_cell(*ri))
+        {
+            continue;
+        }
+        if (one_chance_in(++good_count))
+            result = *ri;
+    }
+    return good_count > 0;
+}
+
+// find_newmons_square() (mon-place.cc) for a hostile; (0, 0) if none.
+static coord_def _newmons_square_outside(monster_type mon_type,
+                                         const coord_def &centre,
+                                         int preferred_radius, int max_radius,
+                                         const actor *in_sight_of)
+{
+    coord_def pos(0, 0);
+    if (_find_spot_outside(centre, mon_type, preferred_radius, pos, -1,
+                           in_sight_of))
+    {
+        return pos;
+    }
+    for (int rad = preferred_radius + 1; rad <= max_radius; ++rad)
+        if (_find_spot_outside(centre, mon_type, rad, pos, rad - 1, in_sight_of))
+            return pos;
+    return pos;
+}
+
 /**
  * For callers that move an existing monster to a spot picked by monster
  * class: if mon may not land on spot, look again around where for a spot
@@ -299,9 +358,38 @@ bool dcc_respot_near(const monster &mon, const coord_def &where, int radius,
 {
     if (!crawl_state.game_is_dcc() || !dcc_monster_barred_from(mon, spot))
         return true;
-    // no_sanctuary also makes the search skip safe cells.
-    return find_habitable_spot_near(where, mon.type, radius, spot,
-                                    exclude_radius, in_sight_of, true);
+    return _find_spot_outside(where, mon.type, radius, spot, exclude_radius,
+                              in_sight_of);
+}
+
+/**
+ * create_monster(): if the spot search put a new hostile on a safe cell
+ * (where placement would refuse it), look again outside. The hook runs
+ * after the trunk search has replaced the requested spot, so this searches
+ * around the spot found, out to twice the requested range, which covers
+ * the original search area.
+ */
+void dcc_respot_new_monster(mgen_data &mg, monster_type montype)
+{
+    if (!in_bounds(mg.pos) || !dcc_generation_barred_at(mg, mg.pos))
+        return;
+    const int range = max(mg.range_preferred, mg.range_max);
+    mg.pos = _newmons_square_outside(montype, mg.pos, mg.range_preferred,
+                                     2 * range,
+                                     (mg.flags & MG_SEE_SUMMONER)
+                                         ? mg.summoner : nullptr);
+}
+
+/// A spot for a monster that is always hostile (a lurker): spot itself, or
+/// a new one outside if spot is a safe cell. (0, 0) if there is none.
+coord_def dcc_hostile_spot(monster_type montype, const coord_def &spot,
+                           const coord_def &centre, int preferred_radius,
+                           int max_radius)
+{
+    if (!crawl_state.game_is_dcc() || spot.origin() || !is_dcc_safe_cell(spot))
+        return spot;
+    return _newmons_square_outside(montype, centre, preferred_radius,
+                                   max_radius, nullptr);
 }
 
 /**
@@ -394,20 +482,37 @@ bool dcc_player_attack_refused(bool quiet)
     return true;
 }
 
-// Spells that count as combat: anything aimed at a target that is not
-// helpful, conjurations, destructive and damage-only spells, clouds, hexes
-// and explosions. Spells that only move or summon allies are allowed;
-// anything this misses is still stopped by the could_harm() backstop.
+/// player_fight(): refuse melee from a safe cell, taking no time even if
+/// the caller already marked the turn as over.
+bool dcc_player_melee_refused()
+{
+    if (!dcc_player_attack_refused(false))
+        return false;
+    you.turn_is_over = false;
+    return true;
+}
+
+// Spells that count as combat: conjurations, destructive and damage-only
+// spells, clouds and explosions, and spells aimed at a creature that are
+// not helpful, hexes included. Utility spells aimed at an object or a place
+// (Apportation, Dig) and spells that only move or summon allies are
+// allowed; anything this misses is still stopped by the could_harm()
+// backstop.
 static bool _harmful_spell(spell_type spell)
 {
     const spell_flags flags = get_spell_flags(spell);
     if (flags & spflag::helpful)
         return false;
-    return spell_harms_target(spell)
-           || spell_is_direct_explosion(spell)
-           || (get_spell_disciplines(spell) & spschool::conjuration)
-           || (flags & (spflag::destructive | spflag::direct_damage_only
-                        | spflag::cloud | spflag::WL_check));
+    if (spell_is_direct_explosion(spell)
+        || (get_spell_disciplines(spell) & spschool::conjuration)
+        || (flags & (spflag::destructive | spflag::direct_damage_only
+                     | spflag::cloud)))
+    {
+        return true;
+    }
+    if (flags & (spflag::obj | spflag::aim_at_space))
+        return false;
+    return spell_harms_target(spell) || (flags & spflag::WL_check);
 }
 
 /// Refuse a harmful spell (cast, or from a wand or ability) from a safe cell.
@@ -443,7 +548,31 @@ bool dcc_evocation_refused(const item_def &item, bool temp)
     }
 }
 
-/// Why a spell or evocation is refused: a clause, or a sentence.
+/// Refuse a known harmful scroll from a safe cell, before it is used up.
+/// Unknown scrolls are not refused, since that would tell the player what
+/// they are (read anyway, they harm nothing through could_harm()).
+bool dcc_scroll_refused(const item_def &item, bool temp, bool ident)
+{
+    if (!temp || !crawl_state.game_is_dcc() || !is_dcc_safe_cell(you.pos())
+        || item.base_type != OBJ_SCROLLS
+        || !(ident || item_type_known(item)))
+    {
+        return false;
+    }
+    switch (item.sub_type)
+    {
+    case SCR_TORMENT:
+    case SCR_IMMOLATION:
+    case SCR_POISON:
+    case SCR_FEAR:
+    case SCR_VULNERABILITY:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/// Why a spell, evocation or scroll is refused: a clause, or a sentence.
 string dcc_no_combat_reason(bool capitalise)
 {
     const string reason = "the Announcer allows no combat in a safe room.";

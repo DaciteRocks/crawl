@@ -9,6 +9,7 @@
 
 #include "act-iter.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "defines.h"
 #include "env.h"
 #include "fixedarray.h"
@@ -95,6 +96,8 @@ static bool _try_to_place_lurker(lurker_data& lurker)
 {
     coord_def spot = find_newmons_square(lurker.mon.mons.type, you.pos(),
                                          2, 5);
+    if (crawl_state.game_is_dcc())
+        spot = dcc_hostile_spot(lurker.mon.mons.type, spot, you.pos(), 2, 5);
 
     if (spot.origin())
         return false;
@@ -120,6 +123,8 @@ static monster* _try_to_reveal_lurker(lurker_data& lurker)
 {
     // Prefer to be at exactly our lurking spot, but allow slight repositioning.
     coord_def spot = find_newmons_square(lurker.mon.mons.type, lurker.pos, 0);
+    if (crawl_state.game_is_dcc())
+        spot = dcc_hostile_spot(lurker.mon.mons.type, spot, lurker.pos, 0, 2);
 
     if (spot.origin())
         return nullptr;

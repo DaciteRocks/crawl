@@ -129,3 +129,17 @@ Reviewers changed:
   AI checks read player-relative monster coordinates and gave no energy, so
   they passed vacuously; fixed, and `dcc_test_safe` is pinned against
   rotation and mirroring (see discovery.md).
+Second review (of the no-combat design) changed:
+- a refused melee never costs time: the quiver's melee action refuses
+  before marking the turn over, and the `player_fight()` refusal clears it;
+- the trunk spot finders no longer skip safe cells at all, so allies
+  (recall, summons, companions) may land inside; hostiles get a spot outside
+  through `create_monster()` and lurker re-searches, and the drag/follow
+  hooks (live again) re-pick outside;
+- utility spells aimed at items or places (Apportation, Dig) are allowed;
+- known harmful scrolls (torment, immolation, poison, fear, vulnerability)
+  are refused before being read; unknown scrolls are not, so nothing leaks;
+- documented that launcher and throwable quiver entries are disabled inside
+  and that the Announcer line prints only on an actual attempt;
+- smoke: no-time refusal, Apportation allowed, ally recall and friendly
+  summons may land inside, hostile summons land outside.
