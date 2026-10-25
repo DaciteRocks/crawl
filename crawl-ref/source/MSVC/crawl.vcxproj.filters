@@ -97,6 +97,9 @@
     <ClCompile Include="..\dcc.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc-clock.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\database.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1138,6 +1141,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc-clock.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\daction-type.h">

@@ -10,6 +10,7 @@ module "dcc"
 
 #include "cluautil.h"
 #include "dcc.h"
+#include "dcc-clock.h"
 #include "state.h"
 
 //
@@ -38,10 +39,85 @@ LUAFN(dcc_enable_for_script_lua)
     return 0;
 }
 
+// The clock helpers below change game state directly; like
+// enable_for_script() they are refused outside headless scripts and tests.
+static bool _dcc_script_only(lua_State *ls, const char *fn)
+{
+    if (crawl_state.script || crawl_state.test)
+        return true;
+    luaL_error(ls, "dcc.%s() is for -script/-test only", fn);
+    return false;
+}
+
+/*** Turns left on the current floor's clock (rounded up; 0 if none runs).
+ * @treturn int
+ * @function floor_turns_left
+ */
+LUAFN(dcc_floor_turns_left_lua)
+{
+    PLUARET(number, dcc_floor_turns_left());
+}
+
+/*** Set the current floor's clock. Script/test only.
+ * @tparam int turns
+ * @function set_floor_turns_left
+ */
+LUAFN(dcc_set_floor_turns_left_lua)
+{
+    const int turns = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "set_floor_turns_left"))
+        return 0;
+    dcc_set_floor_turns_left(turns);
+    return 0;
+}
+
+/*** Spend aut from the floor clock as a player turn would, collapsing the
+ * floor at zero (collapse is skipped in script mode). Script/test only.
+ * @tparam int aut
+ * @function tick
+ */
+LUAFN(dcc_tick_lua)
+{
+    const int aut = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "tick"))
+        return 0;
+    dcc_tick_clock_by(aut);
+    return 0;
+}
+
+/*** Start a fresh clock for the current floor. Script/test only.
+ * @function start_floor_clock
+ */
+LUAFN(dcc_start_floor_clock_lua)
+{
+    if (!_dcc_script_only(ls, "start_floor_clock"))
+        return 0;
+    dcc_start_floor_clock();
+    return 0;
+}
+
+/*** Run the level-arrival hook for the current place, as load_level() does
+ * on a real arrival: starts a clock on a new floor, resumes a parked one on
+ * a floor left earlier. Script/test only.
+ * @function enter_floor
+ */
+LUAFN(dcc_enter_floor_lua)
+{
+    if (!_dcc_script_only(ls, "enter_floor"))
+        return 0;
+    dcc_enter_floor();
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
 { "enable_for_script", dcc_enable_for_script_lua },
+{ "floor_turns_left", dcc_floor_turns_left_lua },
+{ "set_floor_turns_left", dcc_set_floor_turns_left_lua },
+{ "tick", dcc_tick_lua },
+{ "start_floor_clock", dcc_start_floor_clock_lua },
+{ "enter_floor", dcc_enter_floor_lua },
 { nullptr, nullptr }
 };
 

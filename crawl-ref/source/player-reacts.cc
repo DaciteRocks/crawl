@@ -37,6 +37,7 @@
 #include "coordit.h"
 #include "database.h"
 #include "dbg-util.h"
+#include "dcc-clock.h"
 #include "delay.h"
 #ifdef DGL_SIMPLE_MESSAGING
 #include "dgl-message.h"
@@ -1433,6 +1434,8 @@ void player_reacts()
 
     incr_gem_clock();
     incr_zot_clock();
+    if (crawl_state.game_is_dcc())
+        dcc_tick_clock();
 }
 
 void extract_barbs(const char* endmsg)

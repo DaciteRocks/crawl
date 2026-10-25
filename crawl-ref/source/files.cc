@@ -44,6 +44,7 @@
 #include "coordit.h"
 #include "dactions.h"
 #include "dbg-util.h"
+#include "dcc-clock.h"
 #include "dgn-overview.h"
 #include "directn.h"
 #include "dungeon.h"
@@ -2517,6 +2518,9 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     {
         take_note(Note(NOTE_DUNGEON_LEVEL_CHANGE));
     }
+
+    if (make_changes && crawl_state.game_is_dcc())
+        dcc_enter_floor();
 
     // If the player entered the level from a different location than they last
     // exited it, have monsters lose track of where they are

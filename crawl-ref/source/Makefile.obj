@@ -38,6 +38,7 @@ dbg-objstat.o \
 dbg-scan.o \
 dbg-util.o \
 dcc.o \
+dcc-clock.o \
 death-curse.o \
 decks.o \
 delay.o \
@@ -376,6 +377,7 @@ dbg-maps.h.o \
 dbg-objstat.h.o \
 dbg-scan.h.o \
 dcc.h.o \
+dcc-clock.h.o \
 death-curse.h.o \
 debug-defines.h.o \
 debug.h.o \
