@@ -109,6 +109,15 @@ visibly DCC-only. Recorded exceptions:
   `spell_uselessness_reason` (`spl-util.cc`); `cannot_evoke_item_reason`
   (`evoke.cc`); `cannot_read_item_reason` (`item-name.cc`); the entangle
   drag (`player.cc`) and the "arrives with you" follow (`spl-transloc.cc`).
+- Phase 3b (safe-room vault on every floor) keeps two non-call lines that
+  sit beside, and mirror, the Descent `no_descent` checks: `if
+  (!crawl_state.game_is_dcc() && mapdef.has_tag("dcc_only")) return false;`
+  in `maps.cc` `map_selector::accept()`, and the matching veto in
+  `dungeon.cc` `_build_vault_impl()`. They keep `dcc_only` maps out of
+  every other game type. Its other hooks are one-line guarded calls into
+  `dcc-room.cc`: `_dgn_random_map_for_place` (the D:1 arrival vault) and
+  two in `_build_dungeon_level` (place the room; fix up the up stairs just
+  before `_dgn_verify_connectivity`), all in `dungeon.cc`.
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

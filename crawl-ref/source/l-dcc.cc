@@ -10,9 +10,11 @@ module "dcc"
 
 #include "cluautil.h"
 #include "dcc.h"
+#include "branch.h"
 #include "dcc-clock.h"
 #include "dcc-safe.h"
 #include "coord.h"
+#include "dungeon.h"
 #include "fight.h"
 #include "mgen-data.h"
 #include "mon-act.h"
@@ -344,6 +346,49 @@ LUAFN(dcc_melee_takes_turn_lua)
     PLUARET(boolean, took_turn);
 }
 
+/*** Where would the player land on arriving at the current level, as
+ * load_level() places them? Mirrors the destination rule of
+ * _get_dest_stair_type() (files.cc) for these arrivals, then asks the same
+ * dgn_find_nearby_stair() the real arrival uses, from a random spot (the
+ * player's position on the level left behind).
+ * @tparam string how "new_game" (D:1 start), "stairs_i", "stairs_ii",
+ *   "stairs_iii" (down the matching stone stair from above) or "branch"
+ *   (through the branch entrance, onto the branch exit at X:1)
+ * @treturn int x
+ * @treturn int y
+ * @function arrival_spot
+ */
+LUAFN(dcc_arrival_spot_lua)
+{
+    const string how = luaL_checkstring(ls, 1);
+    dungeon_feature_type dest;
+    bool find_first = true;
+    if (how == "new_game" || how == "stairs_i")
+        dest = DNGN_STONE_STAIRS_UP_I;
+    else if (how == "stairs_ii")
+        dest = DNGN_STONE_STAIRS_UP_II;
+    else if (how == "stairs_iii")
+        dest = DNGN_STONE_STAIRS_UP_III;
+    else if (how == "branch")
+        dest = your_branch().exit_stairs;
+    else
+        return luaL_error(ls, "dcc.arrival_spot(): unknown arrival '%s'",
+                          how.c_str());
+
+    // In Hell a stone stair down lands on a random branch exit.
+    if (how != "new_game" && how != "branch" && player_in_hell())
+    {
+        dest = your_branch().exit_stairs;
+        find_first = false;
+    }
+
+    const coord_def spot = dgn_find_nearby_stair(dest, random_in_bounds(),
+                                                 find_first, "");
+    lua_pushnumber(ls, spot.x);
+    lua_pushnumber(ls, spot.y);
+    return 2;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -364,6 +409,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "spot_near_you", dcc_spot_near_you_lua },
 { "summon_near_you", dcc_summon_near_you_lua },
 { "melee_takes_turn", dcc_melee_takes_turn_lua },
+{ "arrival_spot", dcc_arrival_spot_lua },
 { nullptr, nullptr }
 };
 
