@@ -17,6 +17,7 @@
 #include "coordit.h"
 #include "corpse.h"
 #include "dbg-scan.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "directn.h" // feature_description_at
 #include "dungeon.h"
@@ -3285,6 +3286,9 @@ bool mon_can_move_to_pos(const monster* mons, const coord_def& delta,
 
     // Bounds check: don't consider moving out of grid!
     if (!in_bounds(targ))
+        return false;
+
+    if (crawl_state.game_is_dcc() && dcc_monster_barred_from(*mons, targ))
         return false;
 
     // Non-friendly and non-good neutral monsters won't enter

@@ -19,6 +19,7 @@
 #include "cloud.h"
 #include "colour.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "directn.h"
 #include "dungeon.h"
 #include "env.h"
@@ -175,6 +176,8 @@ bool monster_habitable_feat(monster_type mt, dungeon_feature_type feat)
 
 bool monster_habitable_grid(const monster* mon, const coord_def& pos)
 {
+    if (crawl_state.game_is_dcc() && dcc_monster_barred_from(*mon, pos))
+        return false;
     return in_bounds(pos) && monster_habitable_feat(mon, env.grid(pos));
 }
 
@@ -553,6 +556,9 @@ static bool _valid_monster_generation_location(const mgen_data &mg,
                 || you.where_are_you == BRANCH_ABYSS);
         return false;
     }
+
+    if (crawl_state.game_is_dcc() && dcc_generation_barred_at(mg, mg_pos))
+        return false;
 
     const monster_type montype = fixup_zombie_type(mg.cls, mg.base_type);
     if (!monster_habitable_grid(montype, mg_pos)
@@ -3289,6 +3295,9 @@ bool find_habitable_spot_near(const coord_def& where, monster_type mon_type,
             continue;
 
         if (no_sanctuary && is_sanctuary(*ri))
+            continue;
+
+        if (no_sanctuary && crawl_state.game_is_dcc() && is_dcc_safe_cell(*ri))
             continue;
 
         if (one_chance_in(++good_count))
