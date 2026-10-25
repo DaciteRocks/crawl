@@ -22,6 +22,7 @@ int turns_until_zot();
 int turns_until_zot_in(branch_type br);
 void decr_zot_clock(bool extra_life = false);
 void incr_zot_clock();
+void zot_touch_max_hp();
 void set_turns_until_zot(int turns_left);
 
 bool gem_clock_active();
