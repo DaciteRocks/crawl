@@ -4288,6 +4288,8 @@ tileidx_t tileidx_gametype(const game_type gtype)
         return TILEG_STARTUP_STONESOUP;
     case GAME_TYPE_DESCENT:
         return TILEG_STARTUP_IRONSOUP;
+    case GAME_TYPE_DCC:
+        return TILEG_STARTUP_IRONSOUP;
     case GAME_TYPE_TUTORIAL:
         return TILEG_STARTUP_TUTORIAL;
     case GAME_TYPE_HINTS:
