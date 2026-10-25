@@ -103,3 +103,45 @@ check(dcc.floor_turns_left() == 1500, "a collapsed floor is not re-entered at 0"
 
 dcc.set_floor_turns_left(3)
 check(dcc.floor_turns_left() == 3, "set_floor_turns_left sets the clock")
+
+-- Phase 2b: clock surface.
+-- The full clock length follows the floor the clock belongs to.
+debug.goto_place("D:1")
+dcc.start_floor_clock()
+check(dcc.floor_turns_total() == 1500, "D:1 floor clock total is 1500 turns")
+debug.goto_place("D:5")
+dcc.start_floor_clock()
+check(dcc.floor_turns_total() == 1200, "D:5 floor clock total is 1200 turns")
+check(not dcc.floor_clock_paused(), "the clock runs on D:5")
+
+-- The Announcer warns as the clock crosses each threshold, once, and only
+-- the most urgent line when one tick crosses several.
+local function last_messages()
+  return crawl.messages(3) or ""
+end
+dcc.set_floor_turns_left(601)
+dcc.tick(10)
+check(last_messages():find("Halfway there", 1, true) ~= nil,
+      "the Announcer calls 50% left")
+dcc.set_floor_turns_left(51)
+dcc.tick(10)
+check(last_messages():find("Fifty turns", 1, true) ~= nil,
+      "the Announcer calls 50 turns left")
+dcc.set_floor_turns_left(200)
+dcc.tick(1900)
+check(last_messages():find("Ten turns", 1, true) ~= nil,
+      "a tick across several thresholds announces the most urgent")
+check(last_messages():find("Twenty turns", 1, true) == nil,
+      "and not the less urgent ones")
+
+-- Off the connected branches the clock reports itself paused, and the
+-- total still belongs to the floor the clock came from.
+debug.goto_place("D:1")
+dcc.enter_floor(true)
+debug.goto_place("Abyss:1")
+dcc.enter_floor(true)
+check(dcc.floor_clock_paused(), "the clock is reported paused in the Abyss")
+check(dcc.floor_turns_total() == 1500, "the paused clock keeps D:1's total")
+debug.goto_place("D:1")
+dcc.enter_floor(false)
+check(not dcc.floor_clock_paused(), "back on D:1 the clock runs again")

@@ -7,6 +7,8 @@
 
 #include "level-id.h"
 
+struct status_info;
+
 // you.props keys. Clock time is stored in aut (BASELINE_DELAY per turn).
 #define DCC_FLOOR_AUT_LEFT_KEY "dcc_floor_aut_left"
 // level_id::describe() of the connected-branch floor the running clock
@@ -36,4 +38,9 @@ dcc_collapse_result dcc_tick_clock_by(int aut);
 dcc_collapse_result dcc_collapse_floor();
 
 int dcc_floor_turns_left();
+int dcc_floor_turns_total();
+bool dcc_floor_clock_paused();
 void dcc_set_floor_turns_left(int turns);
+
+void dcc_announce(const string &msg);
+void dcc_describe_floor_clock(status_info &inf);

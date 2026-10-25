@@ -8,6 +8,7 @@
 #include "branch.h"
 #include "colour.h"
 #include "database.h"
+#include "dcc-clock.h" // dcc_describe_floor_clock
 #include "dungeon.h" // DESCENT_STAIRS_KEY
 #include "duration-type.h"
 #include "env.h"
@@ -348,6 +349,11 @@ bool fill_status_info(int status, status_info& inf)
 
     case STATUS_ZOT:
         _describe_zot(inf);
+        break;
+
+    case STATUS_DCC_FLOOR:
+        if (crawl_state.game_is_dcc())
+            dcc_describe_floor_clock(inf);
         break;
 
     case STATUS_GEM:
@@ -1509,6 +1515,7 @@ static const vector<unsigned int> important_statuses =
     STATUS_TESSERACT,
     STATUS_ORB,
     STATUS_ZOT,
+    STATUS_DCC_FLOOR,
     STATUS_STAT_ZERO,
     DUR_PARALYSIS,
     DUR_CONF,
