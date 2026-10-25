@@ -12,6 +12,7 @@
 #include "ability.h"
 #include "artefact.h"
 #include "art-enum.h"
+#include "dcc-safe.h"
 #include "describe.h" // describe_to_hit
 #include "directn.h"
 #include "env.h"
@@ -542,6 +543,8 @@ namespace quiver
             // quiver.cc?
 
             set_target(t);
+            if (crawl_state.game_is_dcc() && dcc_player_attack_refused(false))
+                return;
 
             if (you.confused())
             {

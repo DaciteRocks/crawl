@@ -13,7 +13,10 @@ module "dcc"
 #include "dcc-clock.h"
 #include "dcc-safe.h"
 #include "coord.h"
+#include "fight.h"
+#include "mgen-data.h"
 #include "mon-act.h"
+#include "mon-death.h"
 #include "mon-place.h"
 #include "mon-util.h"
 #include "monster.h"
@@ -269,19 +272,20 @@ LUAFN(dcc_spell_refusal_lua)
 }
 
 /*** Pick a spot within radius 3 of the player for the monster at (mx, my),
- * the way a translocation drags a monster along with the player. Returns
- * x, y, or nothing if there is no spot it may land on.
+ * the way a translocation drags a monster along with the player, or recall
+ * brings an ally. Returns x, y, or nothing if there is no spot it may land
+ * on.
  * @tparam int mx
  * @tparam int my
  * @treturn int|nil
  * @treturn int|nil
- * @function drag_spot
+ * @function spot_near_you
  */
-LUAFN(dcc_drag_spot_lua)
+LUAFN(dcc_spot_near_you_lua)
 {
     const actor *act = _dcc_actor_at(ls, 1);
     if (!act || !act->is_monster())
-        return luaL_error(ls, "dcc.drag_spot(): no monster there");
+        return luaL_error(ls, "dcc.spot_near_you(): no monster there");
     const monster &mons = *act->as_monster();
     coord_def spot;
     if (!find_habitable_spot_near(you.pos(), mons.type, 3, spot, 1, &you)
@@ -292,6 +296,52 @@ LUAFN(dcc_drag_spot_lua)
     lua_pushnumber(ls, spot.x);
     lua_pushnumber(ls, spot.y);
     return 2;
+}
+
+/*** Summon a monster by name near the player (create_monster, preferred
+ * range 2, up to 3), hostile or friendly, note where it appeared, and
+ * remove it again. Returns x, y, or nothing if it could not be placed.
+ * @tparam string name
+ * @tparam boolean hostile
+ * @treturn int|nil
+ * @treturn int|nil
+ * @function summon_near_you
+ */
+LUAFN(dcc_summon_near_you_lua)
+{
+    const monster_type mt = get_monster_by_name(luaL_checkstring(ls, 1));
+    if (mt == MONS_NO_MONSTER)
+        return luaL_error(ls, "dcc.summon_near_you(): no such monster");
+    const bool hostile = lua_toboolean(ls, 2);
+    monster *mons = create_monster(
+        mgen_data(mt, hostile ? BEH_HOSTILE : BEH_FRIENDLY, you.pos(),
+                  MHITYOU).set_range(2, 3));
+    if (!mons)
+        return 0;
+    const coord_def pos = mons->pos();
+    monster_die(*mons, KILL_RESET, NON_MONSTER, true);
+    lua_pushnumber(ls, pos.x);
+    lua_pushnumber(ls, pos.y);
+    return 2;
+}
+
+/*** Melee the monster at (x, y) the way the quiver does (the turn is
+ * marked as over first), and say whether it took a turn.
+ * @tparam int x
+ * @tparam int y
+ * @treturn boolean
+ * @function melee_takes_turn
+ */
+LUAFN(dcc_melee_takes_turn_lua)
+{
+    actor *act = _dcc_actor_at(ls, 1);
+    if (!act || !act->is_monster())
+        return luaL_error(ls, "dcc.melee_takes_turn(): no monster there");
+    you.turn_is_over = true;
+    player_fight(act->as_monster());
+    const bool took_turn = you.turn_is_over;
+    you.turn_is_over = false;
+    PLUARET(boolean, took_turn);
 }
 
 static const struct luaL_Reg dcc_dlib[] =
@@ -311,7 +361,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "can_harm", dcc_can_harm_lua },
 { "player_attack_refused", dcc_player_attack_refused_lua },
 { "spell_refusal", dcc_spell_refusal_lua },
-{ "drag_spot", dcc_drag_spot_lua },
+{ "spot_near_you", dcc_spot_near_you_lua },
+{ "summon_near_you", dcc_summon_near_you_lua },
+{ "melee_takes_turn", dcc_melee_takes_turn_lua },
 { nullptr, nullptr }
 };
 

@@ -463,7 +463,7 @@ static void _knight_pinning_attack(monster* mon)
 bool player_fight(monster* defender, bool is_rampage,
                   bool *did_hit, bool simu)
 {
-    if (crawl_state.game_is_dcc() && !simu && dcc_player_attack_refused(false))
+    if (crawl_state.game_is_dcc() && !simu && dcc_player_melee_refused())
         return false;
 
     if (!simu && you.weapon() && !you.confused())

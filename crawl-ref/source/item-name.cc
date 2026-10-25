@@ -18,6 +18,7 @@
 #include "branch.h"
 #include "cio.h"
 #include "colour.h"
+#include "dcc-safe.h"
 #include "decks.h"
 #include "describe.h"
 #include "dgn-overview.h"
@@ -3173,6 +3174,9 @@ string cannot_read_item_reason(const item_def *item, bool temp, bool ident,
     // still possible to use * at the `r` prompt. (Why do we allow this now?)
     if (item->base_type != OBJ_SCROLLS)
         return "You can't read that!";
+
+    if (crawl_state.game_is_dcc() && dcc_scroll_refused(*item, temp, ident))
+        return dcc_no_combat_reason(true);
 
     // temp uselessness only below this check
     if (!temp || (!ident && !item_type_known(*item)))
