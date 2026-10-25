@@ -6,20 +6,28 @@ Gate discovery notes live in `docs/dcc/spec-history/discovery.md`.
 
 ## Gate (every phase; run from Git Bash; every command must exit 0)
 
+This block is the authoritative copy of the gate; `docs/dcc/SPEC.md` points
+here. Paste it whole: the first line sets the paths the rest use.
+
 ```
-cd "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source/MSVC" && MSYS_NO_PATHCONV=1 "/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe" crawl-ref.sln /m "/p:Configuration=Release Tiles" /p:Platform=x64 /p:PlatformToolset=v145 /p:WindowsTargetPlatformVersion=10.0 /v:minimal
-rm -f "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source/nul"
-cd "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source" && ./crawl.exe -builddb -reset-cache
-cd "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source" && ./crawl.exe -script dcc_smoke.lua
+SRC="/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source"; MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
+cd "$SRC/MSVC" && MSYS_NO_PATHCONV=1 "$MSBUILD" crawl-ref.sln /m "/p:Configuration=Release Tiles" /p:Platform=x64 /p:PlatformToolset=v145 /p:WindowsTargetPlatformVersion=10.0 /v:minimal
+rm -f "$SRC/nul"
+cd "$SRC" && ./crawl.exe -builddb -reset-cache
+cd "$SRC" && ./crawl.exe -script dcc_smoke.lua
 ```
 
 - The last line exists from Phase 1b on. Before then, the script check is
   `./crawl.exe -script genlevel.lua D:1` (writes `dump-D-1.map`; delete it).
 - Use the VS 18 Insiders MSBuild exactly as above. Do NOT use VS2022; its C++
-  install on this machine is broken.
+  install on this machine is broken (details in
+  `docs/dcc/spec-history/discovery.md`).
 - `-builddb` and `-script` run headless with the Release Tiles build: no
-  window, exit 0 on success. A Lua error or a missing script exits 1 and
-  prints `script error: ...` to stderr, so the exit code is a real signal.
+  window, exit 0 on success. Observed: a Lua error or a missing script exits 1
+  and prints a `script error: ...` line to stderr (`ctest.cc` `run_tests()`,
+  `fprintf(stderr, "%s error: %s
+", activity, ...)` with activity
+  `"script"`), so the exit code is a real signal.
 - Run `crawl.exe` from `crawl-ref/source/`. It finds `dat/`, `scripts/` and
   `test/` relative to the working directory.
 - Run long builds in the background and redirect logs to a file OUTSIDE the
@@ -37,9 +45,10 @@ show no `nul`, no `crawl.exe`, no `dump-*.map`, and no `dat/des` cache files.
 Debug Console build plus the Lua functional tests. Run at feature boundaries
 (after phases 1b, 2b, 3b, 4b, 5b), not per phase.
 
-Build (about 5 minutes, verified working 2026-10-25):
+Build (about 5 minutes, verified working 2026-10-25; set `SRC` and `MSBUILD`
+as in the gate first):
 ```
-cd "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source/MSVC" && MSYS_NO_PATHCONV=1 "/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe" crawl-ref.sln /m "/p:Configuration=Debug Console" /p:Platform=x64 /p:PlatformToolset=v145 /p:WindowsTargetPlatformVersion=10.0 /v:minimal
+cd "$SRC/MSVC" && MSYS_NO_PATHCONV=1 "$MSBUILD" crawl-ref.sln /m "/p:Configuration=Debug Console" /p:Platform=x64 /p:PlatformToolset=v145 /p:WindowsTargetPlatformVersion=10.0 /v:minimal
 ```
 Run the tests in a REAL console window, from PowerShell:
 ```

@@ -98,6 +98,8 @@ Architecture
 - **Reuse the Descent startup tile** (`TILEG_STARTUP_IRONSOUP`). No new art.
 
 Standard gate (every phase; run from Git Bash; all must exit 0)
+The repo-root `CLAUDE.md` holds the authoritative copy of this gate (Phase 0
+verified it); if the two differ, `CLAUDE.md` wins.
 ```
 cd "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source/MSVC" && MSYS_NO_PATHCONV=1 "/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe" crawl-ref.sln /m "/p:Configuration=Release Tiles" /p:Platform=x64 /p:PlatformToolset=v145 /p:WindowsTargetPlatformVersion=10.0 /v:minimal
 rm -f "/c/Users/Connor Wardell/Desktop/PLUTO2/Hobbies/Programming/DungeonCrawlStoneSoup/crawl-ref/source/nul"
@@ -113,7 +115,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 
 | # | Phase | Status |
 |---|-------|--------|
-| 0 | Gate discovery and repo CLAUDE.md | not started |
+| 0 | Gate discovery and repo CLAUDE.md | done 2026-10-25 |
 | 1a | `GAME_TYPE_DCC` exists and is selectable | not started |
 | 1b | `dcc.cc` module, `dcc` dlua library, smoke script | not started |
 | 2a | Per-floor clock core and collapse | not started |
@@ -187,7 +189,7 @@ switch the smoke gate to `crawl.exe -test dcc` with the script moved to
 neither works, the gate is build + `-builddb` only and each phase's
 Verification step becomes mandatory; say so in `CLAUDE.md`.
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 

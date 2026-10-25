@@ -4,6 +4,13 @@
 
 Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
 
+0. **Why not VS2022.** VS2022 Community's `VC/Tools/MSVC/14.44.35207` has
+   no `include/` directory, and `VC/Auxiliary/Build/` has no
+   `Microsoft.VCToolsVersion*.props` (both re-checked on disk 2026-10-25).
+   MSBuild via VS2022 failed with TRK0005 "Failed to locate CL.exe" and
+   MSB8003 (VCToolsInstallDir undefined). That is the earlier session's
+   result; it was not reproduced in Phase 0. VS 18 Insiders with v145 works.
+
 1. **Release Tiles build.** The Standard gate MSBuild line works and writes
    `crawl-ref/source/crawl.exe` (about 14 MB). An incremental no-op build
    takes about 13 s. A rebuild after switching from another configuration
@@ -15,8 +22,12 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
    files changed. `-headless` was not needed.
 3. **`./crawl.exe -script genlevel.lua D:1`** runs headless: exit 0, about
    1 s, writes `dump-D-1.map` (gitignored by `*.map`; deleted anyway). The
-   exit code is meaningful. A script that calls `error(...)` exits 1 with
-   `script error: <file>:<line>: <msg>` on stderr. A missing script exits 1
+   exit code is meaningful. A script that calls `error(...)` exits 1. Observed on stderr:
+   `script error: ...nCrawlStoneSoup/crawl-ref/source/scripts/zz_tmp_fail.lua:1: deliberate failure`.
+   That line comes from `ctest.cc` `run_tests()`:
+   `fprintf(stderr, "%s error: %s
+", activity, fe.second.c_str())`, where
+   `activity` is `"script"` and the message is the Lua error text. A missing script exits 1
    with `No scripts found matching ...`. So the Release-build smoke-script
    gate (`-script dcc_smoke.lua`) is viable, and the Standard gate block
    needs no amendment.
