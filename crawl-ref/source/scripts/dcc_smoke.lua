@@ -31,3 +31,36 @@ for _, p in ipairs(places) do
     check(test.level_has_down_stair(), p.place .. " has a down stair")
   end
 end
+
+-- Phase 2a: the per-floor clock.
+debug.goto_place("D:1")
+test.regenerate_level()
+dcc.start_floor_clock()
+check(dcc.floor_turns_left() == 1500, "D:1 floor clock starts at 1500 turns")
+dcc.tick(10)
+check(dcc.floor_turns_left() == 1499, "a 10-aut tick leaves 1499 turns")
+dcc.tick(5)
+check(dcc.floor_turns_left() == 1499, "partial turns round up (1498.5 -> 1499)")
+
+-- Arriving on a new floor starts its clock; returning to a floor left with
+-- time remaining (the Descent stair peek) resumes it instead of restarting.
+debug.goto_place("D:4")
+dcc.enter_floor()
+check(dcc.floor_turns_left() == 1200, "D:4 floor clock starts at 1200 turns")
+dcc.tick(100)
+debug.goto_place("D:1")
+dcc.enter_floor()
+check(dcc.floor_turns_left() == 1499, "back on D:1 its clock resumes at 1499")
+dcc.enter_floor()
+check(dcc.floor_turns_left() == 1499, "re-entering the same floor changes nothing")
+debug.goto_place("D:4")
+dcc.enter_floor()
+check(dcc.floor_turns_left() == 1190, "back on D:4 its clock resumes at 1190")
+
+-- Reaching zero calls the collapse, which is skipped in script mode (there is
+-- no real player to drop between levels); it must not crash.
+dcc.set_floor_turns_left(0)
+dcc.tick(10)
+check(dcc.floor_turns_left() == 0, "the clock stops at 0 and collapse does not crash")
+dcc.set_floor_turns_left(3)
+check(dcc.floor_turns_left() == 3, "set_floor_turns_left sets the clock")
