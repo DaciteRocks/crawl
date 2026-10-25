@@ -58,6 +58,25 @@ LUAFN(dcc_floor_turns_left_lua)
     PLUARET(number, dcc_floor_turns_left());
 }
 
+/*** Full length, in turns, of the running (or paused) floor clock: the
+ * tunable for the floor it belongs to. 0 if no clock runs.
+ * @treturn int
+ * @function floor_turns_total
+ */
+LUAFN(dcc_floor_turns_total_lua)
+{
+    PLUARET(number, dcc_floor_turns_total());
+}
+
+/*** Is the floor clock paused (the player is off the connected branches)?
+ * @treturn boolean
+ * @function floor_clock_paused
+ */
+LUAFN(dcc_floor_clock_paused_lua)
+{
+    PLUARET(boolean, dcc_floor_clock_paused());
+}
+
 /*** Set the current floor's clock. Script/test only.
  * @tparam int turns
  * @function set_floor_turns_left
@@ -130,6 +149,8 @@ static const struct luaL_Reg dcc_dlib[] =
 { "is_active", dcc_is_active },
 { "enable_for_script", dcc_enable_for_script_lua },
 { "floor_turns_left", dcc_floor_turns_left_lua },
+{ "floor_turns_total", dcc_floor_turns_total_lua },
+{ "floor_clock_paused", dcc_floor_clock_paused_lua },
 { "set_floor_turns_left", dcc_set_floor_turns_left_lua },
 { "tick", dcc_tick_lua },
 { "start_floor_clock", dcc_start_floor_clock_lua },

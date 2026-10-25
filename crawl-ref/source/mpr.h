@@ -47,6 +47,7 @@ enum msg_channel_type
     MSGCH_DGL_MESSAGE,      // dgamelaunch messages
     MSGCH_DECOR_FLAVOUR,    // Flavour messages for walking on some features
     MSGCH_MONSTER_TIMEOUT,  // Messages for summons/temporary monsters expiring.
+    MSGCH_DCC,              // Crawl Live: the Announcer
 
     NUM_MESSAGE_CHANNELS    // always last
 };

@@ -25,6 +25,7 @@
 #include "notes.h"
 #include "player.h"
 #include "state.h"
+#include "status.h"
 #include "stairs.h" // floor_transition
 #include "stringutil.h" // make_stringf
 #include "terrain.h" // orig_terrain
@@ -57,6 +58,39 @@ static const int DCC_COLLAPSE_RETRY_TURNS = 100;
 // Descent's crumbling stairs make old floors unreachable, so only the last
 // few ever matter.
 static const int DCC_PARKED_CLOCKS_MAX = 16;
+
+// Announcer warnings as the clock runs down. A threshold is either a
+// percentage of the floor's full clock or a fixed number of turns left; each
+// fires once, as the clock crosses it.
+struct dcc_clock_warning
+{
+    int percent; // of the floor's full clock; 0 if `turns` is used
+    int turns;   // turns left; 0 if `percent` is used
+    const char *line;
+};
+
+static const dcc_clock_warning dcc_clock_warnings[] =
+{
+    { 50, 0, "Halfway there, contestant! Our viewers would love to see you "
+             "pick up the pace. Our sponsors would love it even more." },
+    { 25, 0, "A quarter of the clock remains. This is usually the part of the "
+             "show where people start running." },
+    { 10, 0, "Ten percent left. The structural engineers have stopped taking "
+             "your calls." },
+    { 0, 50, "Fifty turns until this floor comes down. Please keep your hands "
+             "and feet inside the dungeon at all times." },
+    { 0, 20, "Twenty turns! The studio audience is on its feet. Mostly to "
+             "get a better view of the drop." },
+    { 0, 10, "Ten turns. The camera crew has already packed up this floor." },
+};
+
+static const char *DCC_COLLAPSE_LINE =
+    "And that's time! Mind the drop, contestant. Do try to land on "
+    "something soft.";
+// %d is DCC_COLLAPSE_RETRY_TURNS.
+static const char *DCC_NO_FLOOR_LINE =
+    "Nowhere left to drop you, so we'll take it out of your hide instead, "
+    "every %d turns until you leave. Stay tuned!";
 
 /// How many turns the clock for a given floor starts with.
 int dcc_floor_turns_for(const level_id &place)
@@ -186,6 +220,7 @@ void dcc_enter_floor(bool just_created)
  */
 static void _collapse_without_fall()
 {
+    dcc_announce(make_stringf(DCC_NO_FLOOR_LINE, DCC_COLLAPSE_RETRY_TURNS));
     mpr("The floor shudders, but there is nowhere left to fall. "
         "The strain tears at your life force!");
     take_note(Note(NOTE_MESSAGE, 0, 0,
@@ -224,10 +259,8 @@ dcc_collapse_result dcc_collapse_floor()
     const level_id before = level_id::current();
     const level_id below(before.branch, before.depth + 1);
 
-    mpr("The floor clock hits zero. With a long groan the floor gives way, "
-        "and you plunge through it!");
-    mpr("Somewhere, an audience applauds.");
-    interrupt_activity(activity_interrupt::force);
+    dcc_announce(DCC_COLLAPSE_LINE);
+    mpr("With a long groan the floor gives way, and you plunge through it!");
 
     floor_transition(DNGN_TRAP_SHAFT, orig_terrain(you.pos()), below,
                      true, false, true, false);
@@ -250,6 +283,38 @@ dcc_collapse_result dcc_collapse_floor()
     return dcc_collapse_result::fell;
 }
 
+/// An Announcer line on the Crawl Live message channel. It interrupts
+/// travel, resting and other multi-turn activities.
+void dcc_announce(const string &msg)
+{
+    mprf(MSGCH_DCC, "%s", msg.c_str());
+    interrupt_activity(activity_interrupt::force);
+}
+
+/// Announce the warning threshold the clock just crossed, going from
+/// old_aut to new_aut left. Old-vs-new crossing, as incr_zot_clock() does
+/// with bezotting_level(). If one tick crosses several thresholds, only the
+/// most urgent (fewest turns left) is announced.
+static void _warn_on_threshold(int old_aut, int new_aut)
+{
+    const int total_aut = dcc_floor_turns_total() * BASELINE_DELAY;
+    const dcc_clock_warning *crossed = nullptr;
+    int crossed_aut = 0;
+    for (const dcc_clock_warning &warning : dcc_clock_warnings)
+    {
+        const int at = warning.percent
+                       ? total_aut * warning.percent / 100
+                       : warning.turns * BASELINE_DELAY;
+        if (old_aut > at && new_aut <= at && (!crossed || at < crossed_aut))
+        {
+            crossed = &warning;
+            crossed_aut = at;
+        }
+    }
+    if (crossed)
+        dcc_announce(crossed->line);
+}
+
 /// Spend aut from the current floor's clock; collapse the floor at zero.
 /// Paused (no-op) outside connected branches.
 dcc_collapse_result dcc_tick_clock_by(int aut)
@@ -261,10 +326,12 @@ dcc_collapse_result dcc_tick_clock_by(int aut)
         return dcc_collapse_result::none;
     }
 
-    const int left = _floor_aut_left() - aut;
+    const int old_left = _floor_aut_left();
+    const int left = old_left - aut;
     if (left > 0)
     {
         _floor_aut_left() = left;
+        _warn_on_threshold(old_left, left);
         return dcc_collapse_result::none;
     }
     _floor_aut_left() = 0;
@@ -285,6 +352,68 @@ int dcc_floor_turns_left()
         return 0;
     const int aut = _floor_aut_left();
     return aut <= 0 ? 0 : (aut + BASELINE_DELAY - 1) / BASELINE_DELAY;
+}
+
+/// The full length, in turns, of the clock the player is running (or has
+/// paused): the tunable for the floor it belongs to. 0 if no clock runs.
+int dcc_floor_turns_total()
+{
+    if (!you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY))
+        return 0;
+    try
+    {
+        return dcc_floor_turns_for(level_id::parse_level_id(
+                   you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string()));
+    }
+    catch (const bad_level_id &)
+    {
+        return DCC_CLOCK_DEFAULT_TURNS;
+    }
+}
+
+/// Is there a floor clock that is not ticking because the player is off the
+/// connected dungeon branches (portal vault, Abyss, Pan, Zig)?
+bool dcc_floor_clock_paused()
+{
+    return crawl_state.game_is_dcc()
+           && you.props.exists(DCC_FLOOR_AUT_LEFT_KEY)
+           && !is_connected_branch(you.where_are_you);
+}
+
+/**
+ * The "Floor (N)" status light (STATUS_DCC_FLOOR), shown next to Zot's slot.
+ * Its colour follows the share of the floor's clock left: WHITE above 50%,
+ * YELLOW above 25%, RED above 10%, LIGHTMAGENTA at 10% or less. While the
+ * clock is paused (off the connected branches) it is DARKGREY and says so.
+ */
+void dcc_describe_floor_clock(status_info &inf)
+{
+    if (!crawl_state.game_is_dcc() || !you.props.exists(DCC_FLOOR_AUT_LEFT_KEY))
+        return;
+
+    const int left = dcc_floor_turns_left();
+    const int total = max(1, dcc_floor_turns_total());
+
+    if (dcc_floor_clock_paused())
+    {
+        inf.light_text = make_stringf("Floor (%d, paused)", left);
+        inf.light_colour = DARKGREY;
+        inf.short_text = "floor clock paused";
+        inf.long_text = make_stringf("The floor clock is paused here, with %d "
+                                     "turns left on your last floor.", left);
+        return;
+    }
+
+    inf.light_text = make_stringf("Floor (%d)", left);
+    if (left * 100 > total * 50)
+        inf.light_colour = WHITE;
+    else if (left * 100 > total * 25)
+        inf.light_colour = YELLOW;
+    else if (left * 100 > total * 10)
+        inf.light_colour = RED;
+    else
+        inf.light_colour = LIGHTMAGENTA;
+    inf.long_text = make_stringf("This floor collapses in %d turns.", left);
 }
 
 void dcc_set_floor_turns_left(int turns)

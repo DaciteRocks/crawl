@@ -1204,6 +1204,10 @@ static msg_colour_type channel_to_msgcol(msg_channel_type channel, int param)
             ret = MSGCOL_CYAN;
             break;
 
+        case MSGCH_DCC:
+            ret = MSGCOL_LIGHTCYAN;
+            break;
+
         case MSGCH_DIAGNOSTICS:
         case MSGCH_MULTITURN_ACTION:
         case MSGCH_DECOR_FLAVOUR:
