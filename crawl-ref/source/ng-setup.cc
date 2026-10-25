@@ -3,6 +3,7 @@
 #include "ng-setup.h"
 
 #include "adjust.h"
+#include "dcc.h"
 #include "dungeon.h"
 #include "end.h"
 #include "files.h"
@@ -670,6 +671,9 @@ static void _setup_generic(const newgame_def& ng,
 
     if (normal_dungeon_setup)
         initial_dungeon_setup();
+
+    if (crawl_state.game_is_dcc())
+        dcc_setup_new_game();
 
     // Generate the second name of Jiyva
     fix_up_jiyva_name();

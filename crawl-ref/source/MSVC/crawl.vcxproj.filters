@@ -94,6 +94,9 @@
     <ClCompile Include="..\dactions.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\database.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -732,6 +735,9 @@
     <ClCompile Include="..\l-crawl.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\l-dcc.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\l-debug.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1129,6 +1135,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dactions.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\daction-type.h">

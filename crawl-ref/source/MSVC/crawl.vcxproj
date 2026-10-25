@@ -321,6 +321,7 @@ python.exe util/gen-all.py</Command>
     <ClCompile Include="..\crash.cc" />
     <ClCompile Include="..\ctest.cc" />
     <ClCompile Include="..\dactions.cc" />
+    <ClCompile Include="..\dcc.cc" />
     <ClCompile Include="..\database.cc">
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -396,6 +397,7 @@ python.exe util/gen-all.py</Command>
     <ClCompile Include="..\l-autofight.cc" />
     <ClCompile Include="..\l-colour.cc" />
     <ClCompile Include="..\l-crawl.cc" />
+    <ClCompile Include="..\l-dcc.cc" />
     <ClCompile Include="..\l-debug.cc" />
     <ClCompile Include="..\l-dgn.cc" />
     <ClCompile Include="..\l-dgnbld.cc" />
@@ -685,6 +687,7 @@ python.exe util/gen-all.py</Command>
     <ClInclude Include="..\cursor-type.h" />
     <ClInclude Include="..\daction-type.h" />
     <ClInclude Include="..\dactions.h" />
+    <ClInclude Include="..\dcc.h" />
     <ClInclude Include="..\database.h" />
     <ClInclude Include="..\dbg-maps.h" />
     <ClInclude Include="..\dbg-objstat.h" />
