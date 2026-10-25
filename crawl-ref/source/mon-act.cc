@@ -2375,6 +2375,9 @@ void handle_monster_move(monster* mons)
     if (_mons_take_special_action(*mons, old_energy))
         return;
 
+    if (crawl_state.game_is_dcc())
+        dcc_adjust_monster_step(*mons, mmov);
+
     const coord_def new_pos = mons->pos() + mmov;
     if (!mons->caught())
     {
@@ -3984,6 +3987,8 @@ static bool _monster_move(monster* mons, coord_def& delta)
         vector<coord_def> adj_move;
         for (adjacent_iterator ai(mons->pos()); ai; ++ai)
         {
+            if (crawl_state.game_is_dcc() && dcc_flop_barred(*mons, *ai))
+                continue;
             if (!cell_is_solid(*ai))
             {
                 adj_move.push_back(*ai);

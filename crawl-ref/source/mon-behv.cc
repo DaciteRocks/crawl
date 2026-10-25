@@ -13,6 +13,7 @@
 #include "attitude-change.h"
 #include "coordit.h"
 #include "database.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "dgn-overview.h"
 #include "dungeon.h"
@@ -68,6 +69,9 @@ static bool _is_valid_foe(monster* mon, unsigned short foe)
     // Ideally this is not outside special cased like this
     if (mons_is_avatar(mon->type))
         return true;
+
+    if (crawl_state.game_is_dcc() && dcc_foe_barred(*mon, foe))
+        return false;
 
     if (foe == MHITNOT || foe == MHITYOU)
         return true;

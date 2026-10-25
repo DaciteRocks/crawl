@@ -37,11 +37,6 @@ bool is_blasphemy(const coord_def& p)
     return testbits(env.pgrid(p), FPROP_BLASPHEMY);
 }
 
-bool is_dcc_safe_cell(const coord_def& p)
-{
-    return map_bounds(p) && testbits(env.pgrid(p), FPROP_DCC_SAFE);
-}
-
 bool is_tide_immune(const coord_def &p)
 {
     return bool(env.pgrid(p) & FPROP_NO_TIDE);

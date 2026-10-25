@@ -19,6 +19,7 @@
 #include "chardump.h"
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "english.h"
 #include "env.h"
@@ -462,6 +463,9 @@ static void _knight_pinning_attack(monster* mon)
 bool player_fight(monster* defender, bool is_rampage,
                   bool *did_hit, bool simu)
 {
+    if (crawl_state.game_is_dcc() && !simu && dcc_player_attack_refused(false))
+        return false;
+
     if (!simu && you.weapon() && !you.confused())
     {
         if (Options.auto_switch && _autoswitch_to_melee())

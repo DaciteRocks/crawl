@@ -27,6 +27,7 @@
 #include "chardump.h"
 #include "cloud.h"
 #include "coordit.h"
+#include "dcc-safe.h"
 #include "delay.h"
 #include "describe.h" // damage_rating
 #include "dgn-overview.h"
@@ -774,6 +775,8 @@ static void _check_spatial_entanglement(const coord_def& oldpos)
 
     coord_def spot;
     if (!find_habitable_spot_near(you.pos(), mon->type, 3, spot, 1, &you))
+        return;
+    if (crawl_state.game_is_dcc() && !dcc_respot_near(*mon, you.pos(), 3, spot, 1, &you))
         return;
 
     place_cloud(CLOUD_TLOC_ENERGY, mon->pos(), random_range(2, 3), &you);

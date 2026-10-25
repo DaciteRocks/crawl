@@ -233,6 +233,24 @@ check(not dcc.is_safe_cell(-1, -1), "out of bounds is not safe")
 
 you.moveto(30, 30)
 
+-- A monster's map position. The dlua monster wrapper's x and y are
+-- relative to the player, so add the player's position back.
+local function mpos(m)
+  local px, py = you.pos()
+  return m.x + px, m.y + py
+end
+local function on_safe(m)
+  return dcc.is_safe_cell(mpos(m))
+end
+-- One AI action: top up the energy run_ai() needs (handle_monster_move()
+-- does nothing without action energy), then act.
+local function act(m)
+  if m.energy < 100 then
+    m.add_energy(100 - m.energy)
+  end
+  m.run_ai()
+end
+
 -- Placement: hostiles are refused on safe cells, allies are not.
 check(dgn.create_monster(31, 31, "orc") == nil,
       "a hostile monster cannot be placed on a safe cell")
@@ -258,8 +276,8 @@ check(dcc.monster_can_land(30, 33, 31, 34),
       "the hostile can land outside the room")
 
 -- A hostile already on a safe cell (an ally that turned) is not trapped: it
--- may leave, and move between safe cells, while a hostile outside may not
--- step onto those cells.
+-- may leave, but only by heading for the way out (never sideways or deeper),
+-- while a hostile outside may not step onto those cells.
 local turned = dgn.create_monster(32, 34, "orc")
 check(turned ~= nil, "a second hostile stands outside the room")
 dgn.fprop_changed(32, 34, "dcc_safe")
@@ -268,8 +286,8 @@ check(dcc.is_safe_cell(32, 34) and dcc.is_safe_cell(31, 34),
       "two outside cells are made safe under the second hostile")
 check(dcc.monster_can_step(32, 34, 33, 34),
       "a hostile on a safe cell can leave it")
-check(dcc.monster_can_step(32, 34, 31, 34),
-      "a hostile on a safe cell can move to another safe cell")
+check(not dcc.monster_can_step(32, 34, 31, 34),
+      "a hostile on a safe cell cannot move sideways to another safe cell")
 check(not dcc.monster_can_step(30, 33, 31, 34),
       "a hostile off the safe cells still cannot step onto one")
 dgn.fprop_changed(32, 34, "dcc_safe")
@@ -281,20 +299,87 @@ turned.dismiss()
 -- Live behaviour: with the player inside, the hostile's own AI never takes
 -- it into the room, and random teleports never land it there.
 for i = 1, 10 do
-  orc.run_ai()
-  check(not dcc.is_safe_cell(orc.x, orc.y),
+  act(orc)
+  check(not on_safe(orc),
         "the hostile's AI keeps it out of the safe room (turn " .. i .. ")")
 end
 local spots = {}
 local nspots = 0
 for i = 1, 20 do
   orc.random_teleport()
-  check(not dcc.is_safe_cell(orc.x, orc.y),
+  check(not on_safe(orc),
         "a random teleport does not land the hostile in the room (" .. i .. ")")
-  local key = orc.x .. "," .. orc.y
+  local key = orc.x .. "," .. orc.y  -- player-relative, still distinct
   if not spots[key] then
     spots[key] = true
     nspots = nspots + 1
   end
 end
 check(nspots > 1, "the random teleports really moved the hostile")
+
+-- Phase 3a review: no combat in a safe room (user decision 2026-10-25).
+-- The player stands just inside the door, right next to a hostile in the
+-- doorway.
+orc.dismiss()
+you.moveto(30, 32)
+local guard = dgn.create_monster(30, 33, "generate_awake orc")
+check(guard ~= nil, "a hostile stands in the doorway, next to the player")
+check(not dcc.can_harm(30, 33, 30, 32),
+      "the hostile in the doorway cannot harm the player inside")
+check(not dcc.can_harm(30, 32, 30, 33),
+      "the player inside cannot harm the hostile in the doorway")
+check(not dcc.can_harm(29, 29, 30, 33),
+      "the ally inside cannot harm the hostile in the doorway")
+check(dcc.player_attack_refused(),
+      "the player cannot melee, fire or throw from inside")
+check(dcc.spell_refusal("Magic Dart"):find("safe room") ~= nil,
+      "a harmful spell is refused inside")
+check(dcc.spell_refusal("Blink"):find("safe room") == nil,
+      "a harmless spell is not refused inside")
+local hp = you.hp()
+for i = 1, 10 do
+  act(guard)
+  check(you.hp() == hp,
+        "the hostile next to the room does not hurt the player (turn " .. i .. ")")
+  check(not on_safe(guard),
+        "the hostile next to the room stays outside (turn " .. i .. ")")
+end
+
+-- A monster dragged along with the player lands outside the room.
+for i = 1, 10 do
+  local x, y = dcc.drag_spot(mpos(guard))
+  check(x ~= nil, "a hostile dragged along with the player finds a spot (" .. i .. ")")
+  check(not dcc.is_safe_cell(x, y),
+        "a hostile dragged along with the player lands outside (" .. i .. ")")
+end
+guard.dismiss()
+
+-- An ally deep in the room turns hostile: it heads straight for the way
+-- out, never deeper, and never hurts the player on the way.
+local turncoat = dgn.create_monster(31, 29, "orc att:friendly")
+check(turncoat ~= nil, "an ally stands deep in the safe room")
+turncoat.add_ench("hexed", 1000)
+check(not turncoat.wont_attack, "the hexed ally has turned hostile")
+check(dcc.monster_can_step(31, 29, 31, 30),
+      "the turned hostile can step towards the way out")
+check(not dcc.monster_can_step(31, 29, 31, 28),
+      "the turned hostile cannot step deeper into the room")
+check(not dcc.monster_can_step(31, 29, 32, 29),
+      "the turned hostile cannot step sideways in the room")
+check(not dcc.monster_can_land(31, 29, 28, 28),
+      "the turned hostile cannot blink deeper into the room")
+local left = false
+for i = 1, 15 do
+  act(turncoat)
+  check(you.hp() == hp,
+        "the turned hostile does not hurt the player (turn " .. i .. ")")
+  if not on_safe(turncoat) then
+    left = true
+    break
+  end
+end
+check(left, "the turned hostile walks out of the safe room")
+turncoat.dismiss()
+
+you.moveto(30, 34)
+check(not dcc.player_attack_refused(), "outside the room the player may attack")
