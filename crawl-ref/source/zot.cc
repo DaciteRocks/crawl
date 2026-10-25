@@ -64,8 +64,7 @@ static int& _zot_clock()
 
 static bool _zot_clock_active_in(branch_type br)
 {
-    return br != BRANCH_ABYSS && !zot_immune() && !crawl_state.game_is_sprint()
-           && !crawl_state.game_is_dcc();
+    return br != BRANCH_ABYSS && !zot_immune() && !crawl_state.game_is_sprint();
 }
 
 // Is the zot clock running, or is it paused or stopped altogether?
@@ -77,6 +76,8 @@ bool zot_clock_active()
 // Has the player stopped the zot clock?
 bool zot_immune()
 {
+    if (crawl_state.game_is_dcc())
+        return true;
     return player_has_orb() || you.zigs_completed;
 }
 

@@ -112,6 +112,53 @@ static int& _floor_aut_left()
     return you.props[DCC_FLOOR_AUT_LEFT_KEY].get_int();
 }
 
+static bool _in_retry()
+{
+    return you.props.exists(DCC_FLOOR_RETRY_KEY)
+           && you.props[DCC_FLOOR_RETRY_KEY].get_bool();
+}
+
+/// Set the running clock: its time left, its full length and whether it is
+/// the branch-bottom retry clock. Every place that sets the clock goes
+/// through here so the three props never disagree.
+static void _set_clock(int aut_left, int aut_total, bool retry)
+{
+    _floor_aut_left() = aut_left;
+    you.props[DCC_FLOOR_AUT_TOTAL_KEY] = aut_total;
+    if (retry)
+        you.props[DCC_FLOOR_RETRY_KEY] = true;
+    else
+        you.props.erase(DCC_FLOOR_RETRY_KEY);
+}
+
+/// The full length, in aut, of the clock for the floor named by place (a
+/// level_id::describe() string). Used where no total was stored: saves from
+/// before Phase 2b.
+static int _derived_aut_total(const string &place)
+{
+    try
+    {
+        return dcc_floor_turns_for(level_id::parse_level_id(place))
+               * BASELINE_DELAY;
+    }
+    catch (const bad_level_id &)
+    {
+        return DCC_CLOCK_DEFAULT_TURNS * BASELINE_DELAY;
+    }
+}
+
+/// The full length, in aut, of the clock that is running (or paused) now.
+/// 0 if no clock runs.
+static int _floor_aut_total()
+{
+    if (you.props.exists(DCC_FLOOR_AUT_TOTAL_KEY))
+        return you.props[DCC_FLOOR_AUT_TOTAL_KEY].get_int();
+    if (!you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY))
+        return 0;
+    return _derived_aut_total(
+               you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string());
+}
+
 static CrawlHashTable& _parked_clocks()
 {
     return you.props[DCC_FLOOR_CLOCKS_KEY].get_table();
@@ -120,7 +167,8 @@ static CrawlHashTable& _parked_clocks()
 /// Keep a floor's remaining time for a later return. A spent (or collapsed)
 /// clock is never parked: its entry is dropped instead, so a floor can never
 /// be re-entered at zero and collapse again on the spot.
-static void _park_clock(const string &place, int aut)
+static void _park_clock(const string &place, int aut, int total,
+                        bool retry)
 {
     CrawlHashTable &parked = _parked_clocks();
     if (aut <= 0)
@@ -131,6 +179,8 @@ static void _park_clock(const string &place, int aut)
 
     CrawlHashTable &entry = parked[place].get_table();
     entry["aut"] = aut;
+    entry["total"] = total;
+    entry["retry"] = retry;
     entry["turn"] = you.num_turns;
 
     while ((int)parked.size() > DCC_PARKED_CLOCKS_MAX)
@@ -153,7 +203,7 @@ void dcc_start_floor_clock()
 {
     const level_id here = level_id::current();
     const int turns = dcc_floor_turns_for(here);
-    _floor_aut_left() = turns * BASELINE_DELAY;
+    _set_clock(turns * BASELINE_DELAY, turns * BASELINE_DELAY, false);
     you.props[DCC_FLOOR_CLOCK_PLACE_KEY] = here.describe();
 
     const string msg = make_stringf("Floor clock started: %d turns", turns);
@@ -196,14 +246,22 @@ void dcc_enter_floor(bool just_created)
         if (old_place == here && !just_created)
             return;
 
-        _park_clock(old_place, _floor_aut_left());
+        _park_clock(old_place, _floor_aut_left(), _floor_aut_total(),
+                    _in_retry());
 
         CrawlHashTable &parked = _parked_clocks();
         if (!just_created && parked.exists(here))
         {
-            const int aut = parked[here].get_table()["aut"].get_int();
+            CrawlHashTable &entry = parked[here].get_table();
+            const int aut = entry["aut"].get_int();
+            // Entries parked before Phase 2b have no total or retry flag.
+            const int total = entry.exists("total")
+                              ? entry["total"].get_int()
+                              : _derived_aut_total(here);
+            const bool retry = entry.exists("retry")
+                               && entry["retry"].get_bool();
             parked.erase(here);
-            _floor_aut_left() = aut;
+            _set_clock(aut, total, retry);
             you.props[DCC_FLOOR_CLOCK_PLACE_KEY] = here;
             return;
         }
@@ -216,17 +274,26 @@ void dcc_enter_floor(bool just_created)
 /**
  * No floor below to fall to (bottom of a branch such as D:12, Zot:5 or the
  * Vestibule), or the fall failed: the trunk Zot-touch penalty instead, then a
- * short clock so it repeats while the player lingers.
+ * short retry clock so it repeats while the player lingers. The Announcer
+ * line and the explanation print on the first such collapse only; later
+ * retry cycles leave just the Zot-touch penalty (its own note and interrupt).
  */
 static void _collapse_without_fall()
 {
-    dcc_announce(make_stringf(DCC_NO_FLOOR_LINE, DCC_COLLAPSE_RETRY_TURNS));
-    mpr("The floor shudders, but there is nowhere left to fall. "
-        "The strain tears at your life force!");
-    take_note(Note(NOTE_MESSAGE, 0, 0,
-                   "Floor clock ran out with no floor below"));
+    if (!_in_retry())
+    {
+        dcc_announce(make_stringf(DCC_NO_FLOOR_LINE,
+                                  DCC_COLLAPSE_RETRY_TURNS));
+        mpr("The floor shudders, but there is nowhere left to fall. "
+            "The strain tears at your life force!");
+        take_note(Note(NOTE_MESSAGE, 0, 0,
+                       "Floor clock ran out with no floor below"));
+    }
+    else
+        mpr("The strain tears at your life force!");
     zot_touch_max_hp();
-    _floor_aut_left() = DCC_COLLAPSE_RETRY_TURNS * BASELINE_DELAY;
+    _set_clock(DCC_COLLAPSE_RETRY_TURNS * BASELINE_DELAY,
+               DCC_COLLAPSE_RETRY_TURNS * BASELINE_DELAY, true);
 }
 
 /**
@@ -259,19 +326,20 @@ dcc_collapse_result dcc_collapse_floor()
     const level_id before = level_id::current();
     const level_id below(before.branch, before.depth + 1);
 
-    dcc_announce(DCC_COLLAPSE_LINE);
-    mpr("With a long groan the floor gives way, and you plunge through it!");
-
     floor_transition(DNGN_TRAP_SHAFT, orig_terrain(you.pos()), below,
                      true, false, true, false);
 
     // Only a fall that happened costs HP and counts as a collapse; otherwise
-    // the no-floor penalty applies once and the short clock restarts.
+    // the no-floor penalty applies once and the short clock restarts. The
+    // fall is announced only once it is known to have happened.
     if (level_id::current() != below)
     {
         _collapse_without_fall();
         return dcc_collapse_result::no_floor;
     }
+
+    dcc_announce(DCC_COLLAPSE_LINE);
+    mpr("With a long groan the floor gave way, and you plunged through it!");
 
     const int old_hp = you.hp;
     dec_hp(max(1, you.hp_max / DCC_COLLAPSE_HP_DIV), false);
@@ -294,10 +362,13 @@ void dcc_announce(const string &msg)
 /// Announce the warning threshold the clock just crossed, going from
 /// old_aut to new_aut left. Old-vs-new crossing, as incr_zot_clock() does
 /// with bezotting_level(). If one tick crosses several thresholds, only the
-/// most urgent (fewest turns left) is announced.
+/// most urgent (fewest turns left) is announced. Silent on the branch-bottom
+/// retry clock: there is no drop to warn about.
 static void _warn_on_threshold(int old_aut, int new_aut)
 {
-    const int total_aut = dcc_floor_turns_total() * BASELINE_DELAY;
+    if (_in_retry())
+        return;
+    const int total_aut = _floor_aut_total();
     const dcc_clock_warning *crossed = nullptr;
     int crossed_aut = 0;
     for (const dcc_clock_warning &warning : dcc_clock_warnings)
@@ -355,20 +426,11 @@ int dcc_floor_turns_left()
 }
 
 /// The full length, in turns, of the clock the player is running (or has
-/// paused): the tunable for the floor it belongs to. 0 if no clock runs.
+/// paused): the tunable for the floor it belongs to, or the retry clock's
+/// length at a branch bottom. 0 if no clock runs.
 int dcc_floor_turns_total()
 {
-    if (!you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY))
-        return 0;
-    try
-    {
-        return dcc_floor_turns_for(level_id::parse_level_id(
-                   you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string()));
-    }
-    catch (const bad_level_id &)
-    {
-        return DCC_CLOCK_DEFAULT_TURNS;
-    }
+    return _floor_aut_total() / BASELINE_DELAY;
 }
 
 /// Is there a floor clock that is not ticking because the player is off the
@@ -385,6 +447,8 @@ bool dcc_floor_clock_paused()
  * Its colour follows the share of the floor's clock left: WHITE above 50%,
  * YELLOW above 25%, RED above 10%, LIGHTMAGENTA at 10% or less. While the
  * clock is paused (off the connected branches) it is DARKGREY and says so.
+ * On the branch-bottom retry clock the next penalty is never far off: RED,
+ * LIGHTMAGENTA for the last 10 turns.
  */
 void dcc_describe_floor_clock(status_info &inf)
 {
@@ -405,6 +469,16 @@ void dcc_describe_floor_clock(status_info &inf)
     }
 
     inf.light_text = make_stringf("Floor (%d)", left);
+    if (_in_retry())
+    {
+        inf.light_colour = left > 10 ? RED : LIGHTMAGENTA;
+        inf.short_text = "no floor below";
+        inf.long_text = make_stringf("There is no floor below to fall to. In "
+                                     "%d turns the strain tears at your life "
+                                     "force again, unless you leave.", left);
+        return;
+    }
+
     if (left * 100 > total * 50)
         inf.light_colour = WHITE;
     else if (left * 100 > total * 25)
@@ -413,7 +487,29 @@ void dcc_describe_floor_clock(status_info &inf)
         inf.light_colour = RED;
     else
         inf.light_colour = LIGHTMAGENTA;
+    inf.short_text = make_stringf("floor collapses in %d turns", left);
     inf.long_text = make_stringf("This floor collapses in %d turns.", left);
+}
+
+/// One line for the time/status command (main.cc), in place of Zot's.
+string dcc_floor_clock_summary()
+{
+    if (!crawl_state.game_is_dcc() || !you.props.exists(DCC_FLOOR_AUT_LEFT_KEY))
+        return "No floor clock is running.";
+
+    const int left = dcc_floor_turns_left();
+    if (dcc_floor_clock_paused())
+    {
+        return make_stringf("The floor clock is paused here, with %d turns "
+                            "left on your last floor.", left);
+    }
+    if (_in_retry())
+    {
+        return make_stringf("There is no floor below. In %d turns the strain "
+                            "tears at your life force again, unless you "
+                            "leave.", left);
+    }
+    return make_stringf("This floor collapses in %d turns.", left);
 }
 
 void dcc_set_floor_turns_left(int turns)

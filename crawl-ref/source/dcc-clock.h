@@ -15,7 +15,16 @@ struct status_info;
 // belongs to. Only connected-branch floors are ever stored, so the key is
 // unique (Branch:depth); in portals, the Abyss, Pan and Zigs the clock pauses.
 #define DCC_FLOOR_CLOCK_PLACE_KEY "dcc_floor_clock_place"
-// Hash of place -> { "aut", "turn" } for connected floors the player left
+// Full length, in aut, of the clock that is running now: the floor's tunable,
+// or the short retry clock at a branch bottom. Set wherever the clock is set
+// (start, resume, retry); saves from before Phase 2b lack it and derive it
+// from the place instead.
+#define DCC_FLOOR_AUT_TOTAL_KEY "dcc_floor_aut_total"
+// Set while the running clock is the short retry clock that follows a
+// collapse with no floor below (branch bottom). No drop warnings fire on it,
+// and the no-floor Announcer line is not repeated.
+#define DCC_FLOOR_RETRY_KEY "dcc_floor_retry"
+// Hash of place -> { "aut", "total", "retry", "turn" } for connected floors the player left
 // with time remaining (the Descent stair peek, a Hell exit back to the
 // Vestibule, an Abyss exit onto an older floor). Capped; oldest go first.
 #define DCC_FLOOR_CLOCKS_KEY "dcc_floor_clocks"
@@ -44,3 +53,4 @@ void dcc_set_floor_turns_left(int turns);
 
 void dcc_announce(const string &msg);
 void dcc_describe_floor_clock(status_info &inf);
+string dcc_floor_clock_summary();

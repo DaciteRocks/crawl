@@ -145,3 +145,67 @@ check(dcc.floor_turns_total() == 1500, "the paused clock keeps D:1's total")
 debug.goto_place("D:1")
 dcc.enter_floor(false)
 check(not dcc.floor_clock_paused(), "back on D:1 the clock runs again")
+
+-- Negative checks: the Announcer stays quiet when it has nothing to say.
+-- Every message after the last mark is what one step printed.
+local MARK = "-- dcc_smoke mark --"
+local function mark()
+  crawl.mpr(MARK)
+end
+local function since_mark()
+  local all = crawl.messages(40) or ""
+  local pos, last = 1, nil
+  while true do
+    local s, e = all:find(MARK, pos, true)
+    if not s then break end
+    last = e
+    pos = e + 1
+  end
+  if not last then
+    error("dcc_smoke FAILED: the mark is not in the message history")
+  end
+  return all:sub(last + 1)
+end
+local function quiet()
+  return since_mark():match("%S") == nil
+end
+
+debug.goto_place("D:5")
+dcc.start_floor_clock()
+dcc.set_floor_turns_left(1000)
+mark()
+dcc.tick(10)
+check(quiet(), "a tick that crosses no threshold announces nothing")
+
+-- At a branch bottom the no-floor line is announced once; the retry clock
+-- that follows gives no drop warnings, and later retries stay quiet.
+debug.goto_place("D:12")
+dcc.enter_floor(true)
+dcc.set_floor_turns_left(1)
+mark()
+check(dcc.tick(10) == "no_floor", "D:12 collapses with no floor below")
+check(since_mark():find("Nowhere left to drop you", 1, true) ~= nil,
+      "the first no-floor collapse is announced")
+check(dcc.floor_turns_total() == 100, "the retry clock's total is 100 turns")
+mark()
+dcc.tick(600)  -- 40 turns left: past 50% and 50 turns
+dcc.tick(250)  -- 15 left: past 25%, 20% and 20 turns
+dcc.tick(100)  -- 5 left: past 10% and 10 turns
+check(quiet(), "the retry clock gives no drop warnings")
+mark()
+check(dcc.tick(100) == "no_floor", "the retry clock runs out again")
+check(since_mark():find("Nowhere left to drop you", 1, true) == nil,
+      "a repeated no-floor collapse is not re-announced")
+check(dcc.floor_turns_left() == 100, "and the retry clock restarts at 100")
+
+-- A parked retry clock stays a retry clock when the player comes back.
+debug.goto_place("D:11")
+dcc.enter_floor(true)
+check(dcc.floor_turns_total() == 1200, "D:11 has a normal 1200-turn clock")
+debug.goto_place("D:12")
+dcc.enter_floor(false)
+check(dcc.floor_turns_left() == 100 and dcc.floor_turns_total() == 100,
+      "back on D:12 the parked retry clock resumes")
+mark()
+dcc.tick(600)
+check(quiet(), "the resumed retry clock gives no drop warnings")
