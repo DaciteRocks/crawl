@@ -186,6 +186,20 @@ The @_great_adj_@ Orb of Zot lies below, waiting for you to descend and find it.
 
 If you descend without finding the Orb of Zot, so far below, it's all over!
 %%%%
+welcome_spam crawl live
+
+Welcome to Crawl Live! The cameras are rolling, the stairs only go down, and the Orb of Zot waits at the bottom.
+
+Good evening, viewers! Tonight's contestant descends one way only, chasing the @_great_adj_@ Orb of Zot. Try not to die on camera.
+
+You're live! Every floor is a one-way trip, and the audience wants the Orb of Zot. So do the sponsors.
+
+The Announcer clears its throat: "Welcome, contestant! Descend, find the Orb of Zot, and remember to smile for the cameras."
+
+Lights, cameras, descent! There is no going back up, and the Orb of Zot is not going to fetch itself.
+
+Ratings are down and the stakes are up. Descend to the @_great_adj_@ Orb of Zot, or die trying in front of millions.
+%%%%
 # things that surround us on Halloween
 _halloween_things_
 

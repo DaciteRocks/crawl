@@ -530,6 +530,7 @@ static void _show_commandline_options_help()
     puts("  -sprint               select Sprint");
     puts("  -sprint-map <name>    preselect a Sprint map");
     puts("  -tutorial             select the Tutorial");
+    puts("  -dcc                  select Crawl Live");
 #ifdef WIZARD
     puts("  -wizard               allow access to wizard mode");
     puts("  -explore              allow access to explore mode");
