@@ -116,7 +116,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | # | Phase | Status |
 |---|-------|--------|
 | 0 | Gate discovery and repo CLAUDE.md | done 2026-10-25 |
-| 1a | `GAME_TYPE_DCC` exists and is selectable | not started |
+| 1a | `GAME_TYPE_DCC` exists and is selectable | done 2026-10-25 |
 | 1b | `dcc.cc` module, `dcc` dlua library, smoke script | not started |
 | 2a | Per-floor clock core and collapse | not started |
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | not started |
@@ -242,7 +242,7 @@ Risks. MSVC may warn on switches missing the new enum; fix by adding cases,
 never by adding `default:`. The save browser lists games by type; a wrong
 `game_type_name_for` shows an empty label, not a crash.
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 

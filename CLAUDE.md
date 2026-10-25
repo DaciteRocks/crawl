@@ -78,6 +78,19 @@ entry, or a `case` in an existing switch. Nothing else. State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,
 no `tags.cc` edits. The reason is upstream merges: trunk diffs must stay tiny.
 
+## Merging upstream
+
+- **Game type numbering.** `GAME_TYPE_DCC` is the last member of `game_type`
+  (`source/game-type.h`, value 11), and the numeric game type is written into
+  saves (`saved_game_type`, read at `tags.cc:2769-2772`). If upstream adds a
+  `GAME_TYPE_*` member, put upstream's new members BEFORE `GAME_TYPE_DCC` in
+  the merge. That renumbers DCC, so existing `saves/dcc/` games break or show
+  up as the wrong type; that is accepted while the mode is in development (no
+  save compatibility between DCC phases). The alternative is to pin explicit
+  values on the enum and re-check the clamp at `tags.cc:2771`.
+- The same applies to `CLO_DCC` in `initfile.cc`: keep it and `"dcc"` in
+  `cmd_ops[]` at matching positions.
+
 ## No trademarks
 
 No names from the Dungeon Crawler Carl books in any in-game string or content
