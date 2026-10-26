@@ -31,6 +31,7 @@
 
 #include "activity-interrupt-type.h"
 #include "branch.h"
+#include "dcc-boss.h" // dcc_boss_killed
 #include "dcc-clock.h" // DCC_COLLAPSED_COUNT_KEY, DCC_FLOOR_CLOCK_PLACE_KEY
 #include "dcc-quest.h" // dcc_quest_kill_counted
 #include "delay.h" // interrupt_activity
@@ -135,6 +136,27 @@ static const vector<dcc_achievement> dcc_achievements =
       "The Orb of Zot! Now carry it out alive and the whole world gets to "
       "clap.",
       DCC_BOX_CELESTIAL, dcc_ach_kind::orb, 0 },
+    // Floor bosses (dcc-boss.cc): unlocked by dcc_boss_killed() on a
+    // counted kill of the boss whose table row names the id.
+    { "boss_d3", "Opening Night",
+      "The Opening Act has left the stage. Feet first. A Gold box for the "
+      "headliner.",
+      DCC_BOX_GOLD, dcc_ach_kind::event, 0 },
+    { "boss_d6", "Mid-Season Twist",
+      "Nobody saw that coming, least of all the Studio Enforcer. The "
+      "writers are thrilled.",
+      DCC_BOX_GOLD, dcc_ach_kind::event, 0 },
+    { "boss_d9", "Sweeps Week",
+      "The Camera Operator caught every second of its own defeat. Ratings "
+      "gold.",
+      DCC_BOX_PLATINUM, dcc_ach_kind::event, 0 },
+    { "boss_d12", "Season Finale",
+      "The Season Finale went out with a bang, mostly yours. Roll the "
+      "credits.",
+      DCC_BOX_PLATINUM, dcc_ach_kind::event, 0 },
+    { "boss_zot5", "Series Finale",
+      "You cancelled the Series Finale. There will be no reunion special.",
+      DCC_BOX_LEGENDARY, dcc_ach_kind::event, 0 },
 };
 
 static const char *dcc_box_tier_names[] =
@@ -487,6 +509,7 @@ void dcc_monster_killed(const monster &mons, killer_type killer,
     dcc_quest_kill_counted(mons);
 
     dcc_unlock_batch batch;
+    dcc_boss_killed(mons);
     dcc_unlock("first_blood");
 
     if (mons_is_unique(mons.type))

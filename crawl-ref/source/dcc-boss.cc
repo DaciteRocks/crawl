@@ -11,6 +11,13 @@
  * outside the safe room, marked with DCC_BOSS_KEY. A boss never blocks the
  * way down; killing it is optional. Kill quests never ask for it
  * (dcc_quest_kill_targets()).
+ *
+ * The first time the player sees a boss (seen_monster() calls
+ * dcc_monster_seen()) the Announcer introduces it. A counted kill
+ * (dcc_monster_killed() calls dcc_boss_killed()) gets its death line and
+ * unlocks its floor's boss_* achievement, which awards the box. A boss's
+ * row comes from its prop, not from the level it stands on, so a boss that
+ * followed the player downstairs keeps its identity.
 **/
 
 #include "AppHdr.h"
@@ -18,12 +25,16 @@
 #include "dcc-boss.h"
 
 #include "act-iter.h" // monster_iterator
+#include "dcc.h" // dcc_announce
+#include "dcc-achieve.h" // dcc_unlock
 #include "dcc-quest.h" // dcc_quest_spot
 #include "dungeon.h" // dgn_place_monster
+#include "hiscores.h" // mark_milestone
 #include "level-id.h"
 #include "mapdef.h" // mons_list, mons_spec
 #include "message.h"
 #include "monster.h"
+#include "notes.h"
 #include "player.h"
 #include "state.h"
 
@@ -153,4 +164,60 @@ monster *dcc_place_boss()
     }
     dprf("DCC: could not place the boss of %s", place.describe().c_str());
     return nullptr;
+}
+
+/// The table row of a floor boss, from its DCC_BOSS_KEY prop (the floor it
+/// was placed on), or nullptr if the monster is no boss.
+const dcc_boss *dcc_boss_row(const monster &mons)
+{
+    if (!dcc_is_boss(mons))
+        return nullptr;
+    try
+    {
+        return dcc_boss_for(
+            level_id::parse_level_id(mons.props[DCC_BOSS_KEY].get_string()));
+    }
+    catch (const bad_level_id &)
+    {
+        return nullptr;
+    }
+}
+
+/**
+ * The player sees a hostile monster for the first time (seen_monster()).
+ * A floor boss not yet introduced gets the Announcer's intro line, a note
+ * and a milestone; DCC_BOSS_SEEN_KEY is saved with the monster, so a
+ * reload or a second sighting introduces nothing.
+ */
+void dcc_monster_seen(monster &mons)
+{
+    if (!crawl_state.game_is_dcc() || mons.props.exists(DCC_BOSS_SEEN_KEY))
+        return;
+    const dcc_boss *boss = dcc_boss_row(mons);
+    if (!boss)
+        return;
+    mons.props[DCC_BOSS_SEEN_KEY] = true;
+    dcc_announce(boss->intro);
+    take_note(Note(NOTE_MESSAGE, 0, 0, string("Met ") + boss->name));
+    mark_milestone("dcc.boss", string("met ") + boss->name + ".");
+}
+
+/**
+ * A counted kill (dcc_monster_killed(), inside its dcc_unlock_batch): if the
+ * monster is a floor boss, the Announcer gives its death line and the
+ * floor's boss_* achievement unlocks, awarding its box. The line goes out
+ * with mprf rather than dcc_announce(), so the kill's batch interrupts the
+ * player once for the line and the unlock together.
+ */
+void dcc_boss_killed(const monster &mons)
+{
+    if (!crawl_state.game_is_dcc())
+        return;
+    const dcc_boss *boss = dcc_boss_row(mons);
+    if (!boss)
+        return;
+    mprf(MSGCH_DCC, "%s", boss->death);
+    dcc_unlock(boss->achievement);
+    take_note(Note(NOTE_MESSAGE, 0, 0, string("Defeated ") + boss->name));
+    mark_milestone("dcc.boss", string("defeated ") + boss->name + ".");
 }
