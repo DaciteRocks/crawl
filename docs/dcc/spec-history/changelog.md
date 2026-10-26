@@ -367,3 +367,16 @@ concrete bases, draugr for skeleton, no-monster branches skipped, earlier
 smoke checks made theme-proof). Review fixes: a layout/encompass vault's
 own monster list and colours now win over the theme; Crowd Work's dead
 `band` token dropped; derived-spec weights split across bases.
+
+## 2026-10-25 — Phase 6e done
+
+Landed: the sponsor booth. Four larger safe-room variants
+(`dcc_safe_room_sponsor_a`–`d`, tag `dcc_sponsor_room`) are used on D:3
+only (`_room_tag()`, shape cache per tag); three booth cells carry the
+`dcc_sponsor` marker prop and become altars of three distinct temple
+gods. dlua `sponsor_altars`. No trunk hooks. Review fix: the build no
+longer reads the player (pregen and seeds); it draws from the whole
+temple list, and the first arrival (`dcc_settle_sponsor_booth()` from
+`dcc_enter_floor`) swaps out the player's own god and gods they cannot
+join. Deviations are in the phase file (the two-step roll, markers answer
+during the build, Phase 5b's loop moved to D:4/D:7).

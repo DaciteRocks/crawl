@@ -161,7 +161,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6b | Boss intro, kill achievement and box | done 2026-10-25 |
 | 6c | Theme assignment and Announcer blurb | done 2026-10-25 |
 | 6d | Themes bite: monsters, colours, clock, quest tier | done 2026-10-25 |
-| 6e | Sponsor booth in the D:3 safe room | not started |
+| 6e | Sponsor booth in the D:3 safe room | done 2026-10-25 |
 | 6f | Sponsor signing: join hook and Gold box | not started |
 | 6g | Species re-pick core | not started |
 | 6h | Kits | not started |
@@ -819,7 +819,7 @@ Status: done 2026-10-25
 tagged `dcc_sponsor_room` with three booth cells, used on D:3 only;
 `dcc-room.cc` fills them with altars of three distinct joinable temple
 gods at build time. ~5 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6f — Sponsor signing: join hook and Gold box
 `docs/dcc/phases/6f-sponsor-signing.md`. One guarded line at the end of

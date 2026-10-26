@@ -541,20 +541,19 @@ static vector<coord_def> _booth_cells(const vault_placement &vp)
 }
 
 /**
- * Turn a sponsor room's booth cells into altars of distinct temple gods the
- * player could join, other than their own; a cell left over, when too few
- * qualify, stays floor. Rolled with the builder's RNG. Does nothing for a
- * plain safe room.
+ * Turn a sponsor room's booth cells into altars of distinct temple gods.
+ * Rolled with the builder's RNG from the whole temple list, never from the
+ * player's state: D:3 may be built long before the player gets there
+ * (pregen_dungeon), and a seed must give every character the same floor.
+ * dcc_settle_sponsor_booth() swaps out the gods the player cannot take on
+ * first arrival. Does nothing for a plain safe room.
  */
 static void _fill_sponsor_booth(const vault_placement &vp)
 {
     if (!vp.map.has_tag(SPONSOR_ROOM_TAG))
         return;
 
-    vector<god_type> pool;
-    for (god_type god : temple_god_list())
-        if (god != you.religion && player_can_join_god(god, false))
-            pool.push_back(god);
+    vector<god_type> pool = temple_god_list();
     shuffle_array(pool);
 
     const vector<coord_def> cells = _booth_cells(vp);
@@ -579,6 +578,52 @@ vector<pair<coord_def, god_type>> dcc_sponsor_altars()
             altars.emplace_back(mark->pos, feat_altar_god(feat));
     }
     return altars;
+}
+
+/// Could the player sign with this god at the booth?
+static bool _sponsor_eligible(god_type god)
+{
+    return god != you.religion && player_can_join_god(god, false);
+}
+
+/**
+ * On the first arrival on a floor with a sponsor booth (dcc_enter_floor(),
+ * dcc-clock.cc): replace each booth altar whose god is the player's own, or
+ * one they cannot join, with an eligible temple god not already in the
+ * booth, so the gods stay distinct; with none left, the cell turns back to
+ * floor.
+ */
+void dcc_settle_sponsor_booth()
+{
+    if (!crawl_state.game_is_dcc())
+        return;
+
+    const vector<pair<coord_def, god_type>> altars = dcc_sponsor_altars();
+    if (altars.empty())
+        return;
+
+    vector<god_type> spare;
+    for (god_type god : temple_god_list())
+    {
+        const bool in_booth = any_of(altars.begin(), altars.end(),
+            [god](const pair<coord_def, god_type> &a) { return a.second == god; });
+        if (!in_booth && _sponsor_eligible(god))
+            spare.push_back(god);
+    }
+    shuffle_array(spare);
+
+    for (const auto &altar : altars)
+    {
+        if (_sponsor_eligible(altar.second))
+            continue;
+        if (spare.empty())
+            env.grid(altar.first) = DNGN_FLOOR;
+        else
+        {
+            env.grid(altar.first) = altar_for_god(spare.back());
+            spare.pop_back();
+        }
+    }
 }
 
 /**

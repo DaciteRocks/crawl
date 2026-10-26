@@ -22,6 +22,8 @@ dungeon_feature_type dcc_start_stair(dungeon_feature_type stair_taken,
 // The D:3 sponsor booth's altars on the current level, with their gods
 // (dcc.sponsor_altars(), l-dcc.cc).
 vector<pair<coord_def, god_type>> dcc_sponsor_altars();
+// First arrival on the booth's floor: swap out gods the player cannot take.
+void dcc_settle_sponsor_booth();
 
 // Defined in files.cc, next to the static _place_player() it wraps; only
 // dcc.arrival_spot() (l-dcc.cc) calls it.

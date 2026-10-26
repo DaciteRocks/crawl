@@ -108,4 +108,29 @@ D:4 rooms are the old ones.
   another with `you.set_species`-style helpers or skip the god checks
   with a message.
 
-Status: not started
+## As built (deviations from the text above)
+
+- The booth is rolled in two steps (review fix). At build time
+  `_fill_sponsor_booth()` shuffles the whole `temple_god_list()` with the
+  builder's RNG and takes three, never reading the player: D:3 can be
+  built long before the player arrives (`pregen_dungeon`), and a seed must
+  give every character the same floor. On the first arrival
+  (`dcc_enter_floor()`'s `just_created` block, which holds under pregen
+  too) `dcc_settle_sponsor_booth()` replaces each booth altar whose god is
+  `you.religion` or fails `player_can_join_god(g, false)` with a distinct
+  eligible god not already in the booth; with none left the cell turns
+  back to floor. `dcc_settle_sponsor_booth()` is declared in `dcc-room.h`
+  and called from `dcc-clock.cc` (no trunk hook).
+- The booth cells are found by their markers: a placed vault's Lua markers
+  answer `property()` during the build (all three found on every D:3
+  build). The map-lines fallback is kept but has not been needed; noted in
+  `docs/dcc/spec-history/discovery.md`.
+- Phase 5b's smoke loop over the four plain variants alternated D:3 and
+  D:7; D:3 now always gets a sponsor variant, so it uses D:4 and D:7.
+  `phase6e()` checks the steward in the sponsor variants.
+- Smoke: besides the checks listed above, a booth built godless whose
+  player then joins one of its gods, and a Xom worshipper's booth, are
+  each settled by `dcc.enter_floor(true)` and checked for three distinct
+  altars without that god.
+
+Status: done 2026-10-25

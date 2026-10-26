@@ -2475,19 +2475,48 @@ local function phase6e()
     check(#dcc.sponsor_altars() == 0, place .. " has no sponsor altars")
   end
 
-  -- The player's own god is never a sponsor.
+  -- The player's own god is never a sponsor. The booth is rolled at build
+  -- time without looking at the player (D:3 may be pregenerated), then
+  -- settled on first arrival (dcc.enter_floor(true)).
+  local function check_settled(god, what)
+    local altars = dcc.sponsor_altars()
+    check(#altars == 3, what .. ": the booth still holds three altars ("
+          .. #altars .. ")")
+    local gods = {}
+    for _, a in ipairs(altars) do
+      check(a.god ~= god, what .. ": the booth has no " .. god .. " altar")
+      check(not gods[a.god], what .. ": booth god " .. a.god
+            .. " appears once")
+      gods[a.god] = true
+    end
+  end
   if not demigod then
     local before = you.god()
+    local function restore()
+      dcc.set_god(before == "No God" and "" or before)
+    end
+
+    -- Built while godless; the player then joins a god on the booth before
+    -- arriving.
+    for i = 1, 3 do
+      dcc.set_god("")
+      build("D:3")
+      local altars = dcc.sponsor_altars()
+      check(#altars == 3, "a godless build gives three altars")
+      local joined = altars[i].god
+      dcc.set_god(joined)
+      check(you.god() == joined, "the player now follows " .. joined)
+      dcc.enter_floor(true)
+      check_settled(joined, "joined " .. joined .. " before arriving")
+    end
+
     dcc.set_god("Xom")
     for i = 1, 3 do
       build("D:3")
-      local altars = dcc.sponsor_altars()
-      check(#altars == 3, "a Xom worshipper's booth still holds three altars")
-      for _, a in ipairs(altars) do
-        check(a.god ~= "Xom", "a Xom worshipper's booth has no Xom altar")
-      end
+      dcc.enter_floor(true)
+      check_settled("Xom", "a Xom worshipper's booth")
     end
-    dcc.set_god(before == "No God" and "" or before)
+    restore()
     check(you.god() == before, "the player's god is restored (" .. you.god()
           .. ")")
   end
