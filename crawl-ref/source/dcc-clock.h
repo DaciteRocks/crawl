@@ -51,6 +51,5 @@ int dcc_floor_turns_total();
 bool dcc_floor_clock_paused();
 void dcc_set_floor_turns_left(int turns);
 
-void dcc_announce(const string &msg);
 void dcc_describe_floor_clock(status_info &inf);
 string dcc_floor_clock_summary();

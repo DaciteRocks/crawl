@@ -12,3 +12,4 @@ const int DCC_STATE_VERSION = 1;
 
 void dcc_setup_new_game();
 void dcc_enable_for_script();
+void dcc_announce(const string &msg);

@@ -24,6 +24,7 @@
 #include "coordit.h"
 #include "corpse.h"
 #include "dactions.h"
+#include "dcc-achieve.h"
 #include "database.h"
 #include "delay.h"
 #include "describe.h"
@@ -3558,6 +3559,8 @@ item_def* monster_die(monster& mons, killer_type killer,
 
     if (!crawl_state.game_is_arena() && count_kill && !in_transit)
         you.kills.record_kill(&mons, killer, pet_kill);
+    if (crawl_state.game_is_dcc())
+        dcc_monster_killed(mons, killer, pet_kill, count_kill && !in_transit && gives_player_xp);
 
     if (mount_death)
     {

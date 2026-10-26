@@ -11,7 +11,10 @@
 
 #include "dcc.h"
 
+#include "activity-interrupt-type.h"
+#include "delay.h" // interrupt_activity
 #include "game-type.h"
+#include "message.h"
 #include "ng-init.h"
 #include "player.h"
 #include "state.h"
@@ -40,4 +43,12 @@ void dcc_enable_for_script()
     // builder ASSERTs on when placing branch entrances in Descent.
     initialise_branch_depths();
     dcc_setup_new_game();
+}
+
+/// An Announcer line on the Crawl Live message channel (MSGCH_DCC). It
+/// interrupts travel, resting and other multi-turn activities.
+void dcc_announce(const string &msg)
+{
+    mprf(MSGCH_DCC, "%s", msg.c_str());
+    interrupt_activity(activity_interrupt::force);
 }
