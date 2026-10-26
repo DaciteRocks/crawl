@@ -52,8 +52,10 @@ god_type dcc_sponsor_god()
 
 /**
  * The player has just joined a god (the last line of join_religion()).
- * From a booth altar, and only the first time, that is a signing: the
- * Announcer's line, a Gold box, a note and a milestone. Every join checks
+ * From a booth altar of that same god, and only the first time, that is a
+ * signing: the Announcer's line, a Gold box, a note and a milestone. (An
+ * orc converting to Beogh while standing on another god's booth altar
+ * signs nothing.) Every join checks
  * the achievements at once, so `signed` unlocks now rather than next turn.
  */
 void dcc_god_joined(god_type god)
@@ -62,14 +64,16 @@ void dcc_god_joined(god_type god)
         return;
 
     dcc_unlock_batch batch;
-    if (dcc_at_sponsor_booth() && !you.props.exists(DCC_SPONSOR_GOD_KEY))
+    if (dcc_at_sponsor_booth()
+        && feat_altar_god(env.grid(you.pos())) == god
+        && !you.props.exists(DCC_SPONSOR_GOD_KEY))
     {
         you.props[DCC_SPONSOR_GOD_KEY].get_int() = god;
         const string name = god_name(god);
         dcc_announce(make_stringf("%s has signed you. Welcome to the family; "
                                   "legal says the contract is binding. A "
                                   "Gold box for the signature.",
-                                  name.c_str()));
+                                  uppercase_first(name).c_str()));
         dcc_award_box(DCC_BOX_GOLD);
         take_note(Note(NOTE_MESSAGE, 0, 0, "Signed with sponsor " + name));
         mark_milestone("dcc.sponsor", "signed with " + name + ".");

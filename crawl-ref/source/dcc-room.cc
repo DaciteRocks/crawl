@@ -53,6 +53,7 @@
 #include "branch.h"
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-sponsor.h" // DCC_SPONSOR_PROP
 #include "dcc-theme.h" // dcc_assign_theme
 #include "dlua.h"
 #include "dungeon.h"
@@ -70,8 +71,7 @@
 static const string SAFE_ROOM_TAG = "dcc_safe_room";
 // D:3's larger variants, with the sponsor booth (Phase 6e).
 static const string SPONSOR_ROOM_TAG = "dcc_sponsor_room";
-// The marker prop on a booth cell (safe_rooms.des), and its glyph.
-static const string SPONSOR_PROP = "dcc_sponsor";
+// The booth cell glyph (safe_rooms.des); its marker prop is DCC_SPONSOR_PROP.
 static const char SPONSOR_GLYPH = 'A';
 static const int SPONSOR_ALTARS = 3;
 
@@ -527,7 +527,7 @@ static vector<coord_def> _booth_cells(const vault_placement &vp)
 {
     vector<coord_def> cells;
     for (vault_place_iterator vi(vp); vi; ++vi)
-        if (env.markers.property_at(*vi, MAT_ANY, SPONSOR_PROP) == "1")
+        if (env.markers.property_at(*vi, MAT_ANY, DCC_SPONSOR_PROP) == "1")
             cells.push_back(*vi);
     if (!cells.empty())
         return cells;
@@ -571,7 +571,7 @@ static void _fill_sponsor_booth(const vault_placement &vp)
 vector<pair<coord_def, god_type>> dcc_sponsor_altars()
 {
     vector<pair<coord_def, god_type>> altars;
-    for (map_marker *mark : env.markers.get_all(SPONSOR_PROP, "1"))
+    for (map_marker *mark : env.markers.get_all(DCC_SPONSOR_PROP, "1"))
     {
         const dungeon_feature_type feat = env.grid(mark->pos);
         if (feat_is_altar(feat))

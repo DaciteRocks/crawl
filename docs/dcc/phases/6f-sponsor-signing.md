@@ -106,4 +106,33 @@ the booth altars: the god welcomes you, the Announcer announces the deal,
 - `str_to_god` wants the exact name; use the names `dcc.sponsor_altars()`
   returns.
 
-Status: not started
+## As built (deviations from the text above)
+
+- A signing needs the altar under the player to be the joined god's own
+  (`feat_altar_god(env.grid(you.pos())) == god`, review fix): an orc
+  converting to Beogh while standing on another god's booth altar signs
+  nothing. The Announcer's line starts with `uppercase_first(god_name())`
+  ("The Shining One has signed you").
+- Box count: unlocking `signed` awards its own Bronze box right after the
+  Gold one, so a booth signing from a fresh achievement set adds two
+  boxes (one Gold, one Bronze); the smoke checks one more Gold box and two
+  new boxes in all, rather than "last box is Gold".
+- The smoke clears the god with `dcc.set_god("")` before each later
+  `dcc.join_god()` (second booth god, off-booth Xom, the wrong-god check),
+  so no real excommunication runs: penance and wrath would leak into
+  later smoke sections. The second booth join still shows the one-shot.
+- `dcc.reset_achievements()` also erases `dcc_sponsor_god` (a fresh
+  game's state), so the off-booth check starts with `signed` locked.
+- The intro adapts to the altar count ("Three sponsors have booths...",
+  "A sponsor has a booth...", or "passed" with none). The D:3 check sits
+  inside `dcc_sponsor_intro()`, so `dcc_enter_floor()` calls it
+  unconditionally in its first-arrival block.
+- The "no intro off D:3" check looks for the intro's own phrases, not the
+  word "sponsor": the lightning theme's blurb says "The sponsors insisted."
+- Extra smoke checks: joining a non-booth god on a booth altar pays
+  nothing; an emptied booth gets the "passed" line; D:4 gets no intro; a
+  booth signing survives a save round trip.
+- `dcc-room.cc` uses the header's `DCC_SPONSOR_PROP` instead of its own
+  copy of the prop name.
+
+Status: done 2026-10-25

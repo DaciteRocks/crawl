@@ -162,7 +162,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6c | Theme assignment and Announcer blurb | done 2026-10-25 |
 | 6d | Themes bite: monsters, colours, clock, quest tier | done 2026-10-25 |
 | 6e | Sponsor booth in the D:3 safe room | done 2026-10-25 |
-| 6f | Sponsor signing: join hook and Gold box | not started |
+| 6f | Sponsor signing: join hook and Gold box | done 2026-10-25 |
 | 6g | Species re-pick core | not started |
 | 6h | Kits | not started |
 | 6i | Live re-pick offer | not started |
@@ -826,7 +826,7 @@ Status: done 2026-10-25
 `join_religion()` calls `dcc_god_joined()` (`dcc-sponsor.cc`): joining
 from a booth altar announces the deal and awards one Gold box, once; the
 Announcer names the sponsors on D:3 arrival. ~9 files, three one-liners.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6g — Species re-pick core
 `docs/dcc/phases/6g-repick-core.md`. First arrival on D:3 rolls three

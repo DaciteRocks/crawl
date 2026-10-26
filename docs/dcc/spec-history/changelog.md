@@ -380,3 +380,18 @@ temple list, and the first arrival (`dcc_settle_sponsor_booth()` from
 `dcc_enter_floor`) swaps out the player's own god and gods they cannot
 join. Deviations are in the phase file (the two-step roll, markers answer
 during the build, Phase 5b's loop moved to D:4/D:7).
+
+## 2026-10-25 — Phase 6f done
+
+Landed: sponsor signing. `dcc-sponsor.cc`: the Announcer names D:3's
+booth gods on the first arrival (`dcc_sponsor_intro()` from
+`dcc_enter_floor`, after the booth is settled; "passed" when empty);
+joining a god on its own booth altar announces the deal and pays one Gold
+box, a note and a milestone, once per game (`dcc_sponsor_god` prop), and
+every join checks achievements so `signed` unlocks at once. Trunk hook:
+one guarded call at the end of `join_religion()` (`religion.cc`, recorded
+in `CLAUDE.md`). dlua `join_god` (script-only), `sponsor`, `at_booth`;
+`reset_achievements` forgets the sponsor. Deviations are in the phase
+file. Review fixes: the altar must be the joined god's (an orc's Beogh
+conversion on a booth altar signs nothing), the line capitalises "The
+Shining One", and `dcc-room.cc` shares `DCC_SPONSOR_PROP`.
