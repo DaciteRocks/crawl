@@ -448,9 +448,41 @@ local function safe_rooms_placed()
   return n
 end
 
+-- Up stairs a floor keeps (dungeon.cc _fixup_stone_stairs()): one on the
+-- first floor of a branch and in the Hell branches, three elsewhere. Trunk
+-- turns the X:1 one into the branch exit.
+local hell_branches = { Dis = true, Geh = true, Coc = true, Tar = true }
+local function expected_ups()
+  if you.depth() == 1 or hell_branches[you.branch()] then
+    return 1
+  end
+  return 3
+end
+
+-- The room's door: the one door next to a safe cell.
+local function room_doors()
+  local doors = {}
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      if dgn.feature_name(dgn.grid(x, y)):find("door") then
+        local by_room = false
+        for dy = -1, 1 do
+          for dx = -1, 1 do
+            by_room = by_room or dcc.is_safe_cell(x + dx, y + dy)
+          end
+        end
+        if by_room then
+          table.insert(doors, { x = x, y = y })
+        end
+      end
+    end
+  end
+  return doors
+end
+
 -- Generates the floor, then checks the room, its contents, every way up,
--- and where each kind of arrival lands (dcc.arrival_spot() asks the same
--- dgn_find_nearby_stair() a real arrival uses).
+-- the way out, and where each kind of arrival lands (dcc.arrival_spot()
+-- runs the real arrival placement).
 local function check_safe_room_floor(place, arrivals)
   debug.goto_place(place)
   local ok, err = pcall(test.regenerate_level)
@@ -458,19 +490,20 @@ local function check_safe_room_floor(place, arrivals)
   check(safe_rooms_placed() == 1, place .. " has exactly one safe room")
 
   local ups = ways_up()
-  check(#ups > 0, place .. " has a way up")
+  check(#ups == expected_ups(), place .. " has " .. expected_ups()
+        .. " way(s) up (found " .. #ups .. ")")
   for _, u in ipairs(ups) do
     check(dcc.is_safe_cell(u.x, u.y),
           place .. ": " .. u.name .. " at " .. u.x .. "," .. u.y
           .. " is inside the safe room")
   end
 
-  local shops, kiosks = 0, 0
+  local shops, kiosks = {}, 0
   for y = 1, dgn.GYM - 2 do
     for x = 1, dgn.GXM - 2 do
       if dcc.is_safe_cell(x, y) then
         if dgn.feature_name(dgn.grid(x, y)) == "enter_shop" then
-          shops = shops + 1
+          table.insert(shops, { x = x, y = y })
         end
         if dgn.feature_desc_at(x, y, "plain"):find("loot box kiosk", 1, true)
         then
@@ -479,8 +512,23 @@ local function check_safe_room_floor(place, arrivals)
       end
     end
   end
-  check(shops == 1, place .. ": the safe room holds the shop")
+  check(#shops == 1, place .. ": the safe room holds the shop")
   check(kiosks == 1, place .. ": the safe room holds the kiosk")
+  local name, full, general, default_price =
+    dcc.shop_at(shops[1].x, shops[1].y)
+  check(name == "Commissary" and full:find("Commissary", 1, true),
+        place .. ": the shop is the Commissary (" .. tostring(full) .. ")")
+  check(general, place .. ": the Commissary is a general store")
+  check(default_price, place .. ": the Commissary charges default prices")
+
+  local doors = room_doors()
+  check(#doors == 1, place .. ": the safe room has one door")
+  local door = doors[1]
+  check(not dcc.is_safe_cell(door.x, door.y),
+        place .. ": the door cell is not a safe cell")
+  local any, reached = dcc.way_on_from(door.x, door.y)
+  check(not any or reached,
+        place .. ": a way on is reachable from the safe room's door")
 
   for _, how in ipairs(arrivals) do
     for i = 1, 3 do
@@ -489,18 +537,27 @@ local function check_safe_room_floor(place, arrivals)
             place .. ": arriving by " .. how .. " lands inside the safe room")
     end
   end
+  -- A shaft, and a floor collapse (the same fall), lands outside the room.
+  for i = 1, 3 do
+    local x, y = dcc.arrival_spot("shaft")
+    check(not dcc.is_safe_cell(x, y),
+          place .. ": falling in lands outside the safe room")
+  end
 end
 
 local down_ways = { "stairs_i", "stairs_ii", "stairs_iii" }
-check_safe_room_floor("D:1", { "new_game" })
-for d = 2, 12 do
+check_safe_room_floor("D:1", { "new_game", "delver_start" })
+-- A Delver starts on D:2 in Descent; in Crawl Live they start in its room.
+check_safe_room_floor("D:2", { "delver_start", "stairs_i", "stairs_ii",
+                               "stairs_iii" })
+for d = 3, 12 do
   check_safe_room_floor("D:" .. d, down_ways)
 end
 -- Branch tops (arrival on the branch exit), branch ends, and the encompass
 -- maps where nothing fits beside the main vault: Vaults:$, the Vestibule of
 -- Hell, and the mostly-water Cocytus end.
 for _, place in ipairs({ "Lair:1", "Orc:1", "Elf:1", "Vaults:1", "Depths:1",
-                         "Zot:1", "Hell", "Coc:1" }) do
+                         "Zot:1", "Hell", "Coc:1", "Temple" }) do
   check_safe_room_floor(place, { "branch" })
 end
 for _, place in ipairs({ "Lair:5", "Orc:2", "Elf:3", "Shoals:4", "Swamp:4",
@@ -508,6 +565,20 @@ for _, place in ipairs({ "Lair:5", "Orc:2", "Elf:3", "Shoals:4", "Swamp:4",
                          "Crypt:3", "Depths:4", "Zot:5", "Coc:7", "Dis:7" }) do
   check_safe_room_floor(place, down_ways)
 end
+-- Placement is random: build the hardest floors a few more times so an
+-- intermittent failure shows up.
+for _, place in ipairs({ "D:2", "Vaults:5", "Slime:5", "Zot:5", "Coc:7",
+                         "Dis:7", "Hell" }) do
+  for i = 1, 3 do
+    check_safe_room_floor(place, {})
+  end
+end
+
+-- Other game types never see the safe rooms: map selection skips them and
+-- placing one directly is vetoed.
+local selection, vetoed = dcc.dcc_only_rejected_outside()
+check(selection, "outside Crawl Live no safe-room map is selected")
+check(vetoed, "outside Crawl Live placing a safe room is vetoed")
 
 -- Off the connected branches there is no safe room.
 debug.goto_place("Sewer")

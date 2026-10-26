@@ -12,10 +12,14 @@ module "dcc"
 #include "dcc.h"
 #include "branch.h"
 #include "dcc-clock.h"
+#include "dcc-room.h"
 #include "dcc-safe.h"
 #include "coord.h"
+#include "coordit.h"
 #include "dungeon.h"
 #include "fight.h"
+#include "flood-find.h"
+#include "maps.h"
 #include "mgen-data.h"
 #include "mon-act.h"
 #include "mon-death.h"
@@ -23,9 +27,11 @@ module "dcc"
 #include "mon-util.h"
 #include "monster.h"
 #include "player.h"
+#include "shopping.h"
 #include "spl-util.h"
 #include "state.h"
 #include "terrain.h"
+#include "unwind.h"
 
 //
 // Non-user-accessible bindings (dlua).
@@ -346,14 +352,16 @@ LUAFN(dcc_melee_takes_turn_lua)
     PLUARET(boolean, took_turn);
 }
 
-/*** Where would the player land on arriving at the current level, as
- * load_level() places them? Mirrors the destination rule of
- * _get_dest_stair_type() (files.cc) for these arrivals, then asks the same
- * dgn_find_nearby_stair() the real arrival uses, from a random spot (the
- * player's position on the level left behind).
- * @tparam string how "new_game" (D:1 start), "stairs_i", "stairs_ii",
- *   "stairs_iii" (down the matching stone stair from above) or "branch"
- *   (through the branch entrance, onto the branch exit at X:1)
+/*** Where does the player land on arriving at the current level? Runs the
+ * real arrival placement (files.cc _place_player(), through
+ * dcc_place_player_as_arriving()) and returns the player's new position.
+ * The player arrives from a random spot (their position on the level left
+ * behind).
+ * @tparam string how "new_game" or "delver_start" (the two stairs startup.cc
+ *   starts a game with, put through dcc_start_stair() as load_level() does),
+ *   "stairs_i", "stairs_ii", "stairs_iii" (down the matching stone stair
+ *   from above), "branch" (through the branch entrance) or "shaft" (a shaft
+ *   or a floor collapse, which falls the same way)
  * @treturn int x
  * @treturn int y
  * @function arrival_spot
@@ -361,31 +369,126 @@ LUAFN(dcc_melee_takes_turn_lua)
 LUAFN(dcc_arrival_spot_lua)
 {
     const string how = luaL_checkstring(ls, 1);
-    dungeon_feature_type dest;
-    bool find_first = true;
-    if (how == "new_game" || how == "stairs_i")
-        dest = DNGN_STONE_STAIRS_UP_I;
+    dungeon_feature_type taken;
+    if (how == "new_game")
+        taken = dcc_start_stair(DNGN_STONE_STAIRS_DOWN_I, LOAD_START_GAME);
+    else if (how == "delver_start")
+        taken = dcc_start_stair(DNGN_STONE_STAIRS_UP_I, LOAD_START_GAME);
+    else if (how == "stairs_i")
+        taken = DNGN_STONE_STAIRS_DOWN_I;
     else if (how == "stairs_ii")
-        dest = DNGN_STONE_STAIRS_UP_II;
+        taken = DNGN_STONE_STAIRS_DOWN_II;
     else if (how == "stairs_iii")
-        dest = DNGN_STONE_STAIRS_UP_III;
+        taken = DNGN_STONE_STAIRS_DOWN_III;
     else if (how == "branch")
-        dest = your_branch().exit_stairs;
+        taken = your_branch().entry_stairs;
+    else if (how == "shaft")
+        taken = DNGN_TRAP_SHAFT;
     else
         return luaL_error(ls, "dcc.arrival_spot(): unknown arrival '%s'",
                           how.c_str());
 
-    // In Hell a stone stair down lands on a random branch exit.
-    if (how != "new_game" && how != "branch" && player_in_hell())
-    {
-        dest = your_branch().exit_stairs;
-        find_first = false;
-    }
+    dcc_place_player_as_arriving(taken);
+    lua_pushnumber(ls, you.pos().x);
+    lua_pushnumber(ls, you.pos().y);
+    return 2;
+}
 
-    const coord_def spot = dgn_find_nearby_stair(dest, random_in_bounds(),
-                                                 find_first, "");
-    lua_pushnumber(ls, spot.x);
-    lua_pushnumber(ls, spot.y);
+/*** Can the player walk from a cell to a way on from this floor (a stone
+ * stair or hatch down, a branch entrance, a Descent exit)? Uses trunk's
+ * flood_find, walking where travel does.
+ * @tparam int x
+ * @tparam int y
+ * @treturn boolean whether the floor has any way on at all
+ * @treturn boolean whether one is reachable from (x, y)
+ * @function way_on_from
+ */
+LUAFN(dcc_way_on_from_lua)
+{
+    const coord_def from(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    auto way_on = [](dungeon_feature_type feat)
+    {
+        return feat_is_stone_stair_down(feat)
+               || feat == DNGN_ESCAPE_HATCH_DOWN
+               || feat_is_branch_entrance(feat)
+               || feat_is_descent_exitable(feat);
+    };
+
+    bool any = false;
+    for (rectangle_iterator ri(1); ri; ++ri)
+        any = any || way_on(env.grid(*ri));
+
+    flood_find<feature_grid, coord_predicate> ff(env.grid, in_bounds);
+    for (int f = 0; f < NUM_FEATURES; ++f)
+        if (way_on(static_cast<dungeon_feature_type>(f)))
+            ff.add_feat(f);
+    const bool reached = in_bounds(from)
+                         && ff.find_first_from(from, env.level_map_mask).x;
+    lua_pushboolean(ls, any);
+    lua_pushboolean(ls, reached);
+    return 2;
+}
+
+/*** The shop at a cell, if any.
+ * @tparam int x
+ * @tparam int y
+ * @treturn string|nil the name the vault gave it (nil if no shop)
+ * @treturn string its full displayed name
+ * @treturn boolean whether it is a plain general store (not antique)
+ * @treturn boolean whether its greed lies in the range trunk's default
+ *   pricing rolls for its type on this floor (dungeon.cc
+ *   greed_for_shop_type()), i.e. no greed override
+ * @function shop_at
+ */
+LUAFN(dcc_shop_at_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    shop_struct *shop = in_bounds(c) ? shop_at(c) : nullptr;
+    if (!shop)
+    {
+        lua_pushnil(ls);
+        return 1;
+    }
+    // greed_for_shop_type(): base + random2(5) (stock-identifying types)
+    // + level / 6 + random2(level * 2 / 3); shop.level is twice the level.
+    const int level = shop->level / 2;
+    const int lo = 10 + level / 6;
+    const int hi = 14 + level / 6 + max(level * 2 / 3 - 1, 0);
+    lua_pushstring(ls, shop->shop_name.c_str());
+    lua_pushstring(ls, shop_name(*shop).c_str());
+    lua_pushboolean(ls, shop->type == SHOP_GENERAL);
+    lua_pushboolean(ls, shoptype_identifies_stock(shop->type)
+                        && shop->greed >= lo && shop->greed <= hi);
+    return 4;
+}
+
+/*** Are the safe-room maps kept out of other game types? Pretends the game
+ * is a normal one and asks both guards: map selection (maps.cc
+ * map_selector::accept()) must find no safe room, and placing one directly
+ * (dungeon.cc _build_vault_impl()) must veto before writing anything.
+ * @treturn boolean whether selection rejected the maps
+ * @treturn boolean whether direct placement vetoed
+ * @function dcc_only_rejected_outside
+ */
+LUAFN(dcc_only_rejected_outside_lua)
+{
+    unwind_var<game_type> normal(crawl_state.type, GAME_TYPE_NORMAL);
+    const bool selection = !random_map_for_tag("dcc_safe_room", false, false);
+
+    bool vetoed = false;
+    if (const map_def *mdef = find_map_by_name("dcc_safe_room_a"))
+    {
+        try
+        {
+            dgn_place_map(mdef, false, true, coord_def(GXM / 2, GYM / 2));
+        }
+        catch (const dgn_veto_exception &)
+        {
+            vetoed = true;
+        }
+    }
+    lua_pushboolean(ls, selection);
+    lua_pushboolean(ls, vetoed);
     return 2;
 }
 
@@ -410,6 +513,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "summon_near_you", dcc_summon_near_you_lua },
 { "melee_takes_turn", dcc_melee_takes_turn_lua },
 { "arrival_spot", dcc_arrival_spot_lua },
+{ "way_on_from", dcc_way_on_from_lua },
+{ "shop_at", dcc_shop_at_lua },
+{ "dcc_only_rejected_outside", dcc_only_rejected_outside_lua },
 { nullptr, nullptr }
 };
 

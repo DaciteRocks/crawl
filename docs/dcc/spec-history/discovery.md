@@ -97,3 +97,24 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
   directly and passed vacuously; fixed.
 - `dgn.place_map()` may rotate or mirror a vault; a test vault that the
   smoke reads by fixed coordinates needs `no_rotate no_hmirror no_vmirror`.
+
+## Phase 3b — safe-room vault (2026-10-25)
+
+- During a level build, vault items are in `env.item` with a position but
+  are not linked into `env.igrid` until `link_items()` at the end, so an
+  `igrid` check does not see them. `dcc-room.cc` scans `env.item` instead;
+  the first version dug the room over vault loot on the Dis end
+  ("Item ... buggily placed in feature").
+- A Delver starts on D:2 in Descent with `stair_taken =
+  DNGN_STONE_STAIRS_UP_I` (`startup.cc`), which lands on a down stair. The
+  Descent stair peek can also step back up a stair, so "an up stair was
+  taken" alone does not mean a new game; `load_mode == LOAD_START_GAME`
+  does.
+- `brflag::islanded` is set on the Tomb only. Every other Descent floor
+  must be one walking zone (`_add_connecting_escape_hatches()`), so trunk
+  never sees a closed chamber except inside an opaque vault.
+- A float vault given a position lands at `pos - size/2`
+  (`maps.cc` `_apply_vault_grid()`); once `dgn_place_map()` returns, the
+  vault is written and cannot be taken back.
+- `reread_maps()` rebuilds every `map_def` when a des file changes under a
+  running game, so cached `map_def` pointers must be refreshed by name.

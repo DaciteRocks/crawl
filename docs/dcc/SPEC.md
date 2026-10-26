@@ -121,7 +121,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 2a | Per-floor clock core and collapse | done 2026-10-25 |
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | done 2026-10-25 |
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | done 2026-10-25 |
-| 3b | Safe-room vault on every floor | not started |
+| 3b | Safe-room vault on every floor | done 2026-10-25 |
 | 4a | Achievement table, hooks, Announcer lines | not started |
 | 4b | Loot boxes and the kiosk | not started |
 | 5a | Quest engine (Lua, four objective kinds) | not started |
@@ -504,7 +504,7 @@ branch entrances; the safe room must not swallow them (it only holds up
 stairs). If the builder vetoes levels too often (`dgn_veto_exception`), make
 the vault `transparent` and smaller before changing C++.
 
-Status: not started
+Status: done 2026-10-25
 
 ---
 

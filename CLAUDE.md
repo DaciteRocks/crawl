@@ -117,7 +117,13 @@ visibly DCC-only. Recorded exceptions:
   every other game type. Its other hooks are one-line guarded calls into
   `dcc-room.cc`: `_dgn_random_map_for_place` (the D:1 arrival vault) and
   two in `_build_dungeon_level` (place the room; fix up the up stairs just
-  before `_dgn_verify_connectivity`), all in `dungeon.cc`.
+  before `_dgn_verify_connectivity`), all in `dungeon.cc`; and one at the
+  top of `load_level()` in `files.cc` (`stair_taken =
+  dcc_start_stair(...)`, so a Delver's new game starts on the room's `{`).
+  It also keeps one non-call wrapper in `files.cc`,
+  `dcc_place_player_as_arriving()` (declared in `dcc-room.h`), which runs
+  the static `_place_player()` for `dcc.arrival_spot()`, so the smoke test
+  uses the real arrival code instead of a copy of it.
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

@@ -143,3 +143,37 @@ Second review (of the no-combat design) changed:
   and that the Announcer line prints only on an actual attempt;
 - smoke: no-time refusal, Apportation allowed, ally recall and friendly
   summons may land inside, hostile summons land outside.
+
+## 2026-10-25 — Phase 3b done
+
+Landed: every connected-branch floor except the Tomb gets one safe-room
+vault (`dat/des/dcc/safe_rooms.des`, four variants). It holds all of the
+floor's up stairs, one door, the Commissary general shop at normal prices
+and an inactive loot box kiosk. On D:1 it is the arrival vault.
+`dcc-room.cc` digs the room into wall first, then into deep water or lava,
+then into open floor. Up stairs and exits outside the room are removed
+before trunk's connectivity checks. `dcc_only` guards in `maps.cc` and
+`dungeon.cc` keep the maps out of other game types. Reviewers changed:
+- a Delver now starts inside the D:2 safe room (`dcc_start_stair()`, a
+  guarded hook in `files.cc` `load_level()`);
+- `dcc.arrival_spot()` runs the real `_place_player()` through one wrapper
+  in `files.cc` (recorded in `CLAUDE.md`), instead of a copy of
+  `_get_dest_stair_type()`;
+- a removed up stair that was the only exit from an area becomes a down
+  hatch, as trunk's `_fixup_branch_stairs()` does with vault stairs; at a
+  branch end it becomes floor;
+- the checks for water, lava and open floor now use trunk's
+  `dgn_count_disconnected_zones()`, the same count its veto uses. The
+  survey runs once per level and the variant shapes are cached for the
+  whole process;
+- `no_wall_fixup` on the maps (the room's walls were turning slimy on
+  Slime);
+- found while testing: the room could be dug over vault loot, because
+  items are not in `igrid` yet during the build. Fixed;
+- smoke: exact up-stair counts, one door that is not a safe cell, a way
+  on reachable from the door, the shop's name and default prices, shaft
+  and collapse landings outside the room, the Delver start, Temple, repeat
+  builds of the hardest floors, and `dcc_only` rejected in other game types.
+Rejected: returning false when the vault lands off its spot. The vault is
+already written by then, so a retry would add a second room. It still
+vetoes, and now also clears the shape cache.
