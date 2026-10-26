@@ -34,6 +34,10 @@ void dcc_repick_decline();
 // DCSS). One per game, given as part of an accepted re-roll (Phase 6i).
 // String: the kit id given. Its presence is the one-shot.
 #define DCC_KIT_KEY "dcc_kit"
+// Bool: an accepted re-roll is owed its kit (set by dcc_repick_apply(),
+// erased when dcc_give_kit() delivers one). Saved, so a reload between
+// the species change and the kit choice still asks for the kit.
+#define DCC_KIT_PENDING_KEY "dcc_kit_pending"
 
 /// A kit: a few des ITEM: specs, dropped at the player's feet.
 struct dcc_kit
@@ -47,3 +51,10 @@ struct dcc_kit
 const vector<dcc_kit> &dcc_kit_table();
 const dcc_kit *dcc_find_kit(const string &id);
 bool dcc_give_kit(const string &id, bool force = false);
+bool dcc_kit_pending();
+bool dcc_kit_suits(const dcc_kit &kit);
+vector<const dcc_kit *> dcc_kit_offer();
+
+// The live offer (Phase 6i), asked from the main loop.
+void dcc_repick_turn();
+void dcc_repick_before_command();

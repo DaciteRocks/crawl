@@ -3098,3 +3098,117 @@ local function phase6h()
   debug.goto_place("D:1")
 end
 phase6h()
+
+-- Phase 6i: the live re-pick offer, asked from the main loop's
+-- before-command hook. Headless scripts are never asked; the kit an
+-- accepted re-roll owes is a saved flag.
+local function phase6i()
+  local function worn_slots()
+    local slots = {}
+    for i = 0, 51 do
+      local it = items.inslot(i)
+      if it and it.equipped then slots[#slots + 1] = i end
+    end
+    return slots
+  end
+  local function has(list, id)
+    for _, v in ipairs(list) do
+      if v == id then return true end
+    end
+    return false
+  end
+
+  -- What the re-pick and the species changes below alter, to put back.
+  local race0 = you.race()
+  local hp0 = you.hp()
+  local worn0 = worn_slots()
+  local god0 = you.god()
+  dcc.set_god("")
+
+  dcc.reset_repick()
+  dcc.reset_kit()
+  check(not dcc.kit_pending(), "no kit is owed before a re-roll")
+
+  -- A fresh D:3 arrival, standing in the safe room.
+  debug.goto_place("D:3")
+  test.regenerate_level()
+  dcc.arrival_spot("stairs_i")
+  dcc.enter_floor(true)
+  local px, py = you.pos()
+  check(dcc.is_safe_cell(px, py), "the D:3 arrival stands in the safe room")
+  check(dcc.repick_pending(), "the D:3 arrival offers a re-pick")
+  local choices = dcc.repick_choices()
+
+  mark()
+  dcc.before_command()
+  check(dcc.repick_pending() and #dcc.repick_choices() == #choices,
+        "the before-command hook leaves the offer open headless")
+  check(quiet(), "and says nothing: scripts are never asked")
+  check(dcc.kit() == nil and not dcc.kit_pending(),
+        "and gives no kit")
+  check(you.race() == race0, "and changes no species")
+
+  -- Declining gets no kit.
+  dcc.repick_decline()
+  check(not dcc.kit_pending() and dcc.kit() == nil,
+        "declining the re-roll owes no kit")
+  dcc.reset_repick()
+
+  -- Accepting owes a kit until one is delivered, across a reload.
+  dcc.repick_roll()
+  choices = dcc.repick_choices()
+  check(dcc.repick(choices[1]), "the re-pick to " .. choices[1] .. " applies")
+  check(dcc.kit_pending(), "an accepted re-roll owes a kit")
+  dcc.save_roundtrip()
+  check(dcc.kit_pending(), "the owed kit survives a save round trip")
+  mark()
+  dcc.before_command()
+  check(quiet() and dcc.kit_pending(), "headless, the kit is never asked")
+  local offer = dcc.kit_offer()
+  check(#offer >= 1, "the " .. choices[1] .. " is offered a kit ("
+        .. table.concat(offer, ",") .. ")")
+  check(dcc.give_kit(offer[1]), "the " .. offer[1] .. " kit is given")
+  check(not dcc.kit_pending() and dcc.kit() == offer[1],
+        "giving the kit settles what was owed")
+  dcc.reset_repick()
+  dcc.reset_kit()
+
+  -- Kits that suit the body: a Human may take any; a Felid wields and
+  -- wears nothing, an Octopode wears no body armour, so the Steel and
+  -- Arcana kits (scale mail, robe) are not offered to them.
+  check(you.change_species("Human"), "become a Human")
+  offer = dcc.kit_offer()
+  check(table.concat(offer, ",") == "steel,arcana,supplies",
+        "a Human is offered every kit (" .. table.concat(offer, ",") .. ")")
+  for _, sp in ipairs({ "Felid", "Octopode" }) do
+    check(you.change_species(sp), "become " .. sp)
+    offer = dcc.kit_offer()
+    check(not has(offer, "steel") and not has(offer, "arcana")
+          and has(offer, "supplies"),
+          "the " .. sp .. " is offered Supplies only ("
+          .. table.concat(offer, ",") .. ")")
+  end
+  check(you.change_species("Mummy"), "become a Mummy")
+  offer = dcc.kit_offer()
+  check(has(offer, "steel"), "a Mummy may take Steel; its potions do not "
+        .. "count (" .. table.concat(offer, ",") .. ")")
+
+  -- Put the smoke character back, as Phase 6g's checks do.
+  check(you.change_species(race0), "change back to " .. race0)
+  for _, slot in ipairs(worn0) do
+    local it = items.inslot(slot)
+    if it and not it.equipped then
+      it.equip()
+      dcc.run_delays(20)
+    end
+  end
+  check(#worn_slots() == #worn0, "the worn items are back on ("
+        .. #worn_slots() .. " of " .. #worn0 .. ")")
+  dcc.set_hp(hp0)
+  dcc.set_god(god0 == "No God" and "" or god0)
+  dcc.reset_repick()
+  dcc.reset_kit()
+  test.regenerate_level()
+  debug.goto_place("D:1")
+end
+phase6i()

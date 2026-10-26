@@ -1856,7 +1856,8 @@ LUAFN(dcc_repick_decline_lua)
 }
 
 /*** Forget the re-pick entirely (the offer, its choices and how it was
- * spent), as in a game that never reached D:3. Script/test only.
+ * spent, and a kit it is still owed), as in a game that never reached
+ * D:3. Script/test only.
  * @function reset_repick
  */
 LUAFN(dcc_reset_repick_lua)
@@ -1866,6 +1867,7 @@ LUAFN(dcc_reset_repick_lua)
     you.props.erase(DCC_REPICK_OFFER_KEY);
     you.props.erase(DCC_REPICK_CHOICES_KEY);
     you.props.erase(DCC_REPICKED_KEY);
+    you.props.erase(DCC_KIT_PENDING_KEY);
     return 0;
 }
 
@@ -1992,6 +1994,45 @@ LUAFN(dcc_reset_kit_lua)
     return 0;
 }
 
+/*** Is an accepted re-roll still owed its kit (dcc_kit_pending())?
+ * @treturn boolean
+ * @function kit_pending
+ */
+LUAFN(dcc_kit_pending_lua)
+{
+    PLUARET(boolean, dcc_kit_pending());
+}
+
+/*** The ids of the kits the kit prompt would offer the player now
+ * (dcc_kit_offer(): the kits that suit their body, else Supplies).
+ * @treturn table array of kit ids
+ * @function kit_offer
+ */
+LUAFN(dcc_kit_offer_lua)
+{
+    lua_newtable(ls);
+    int i = 0;
+    for (const dcc_kit *kit : dcc_kit_offer())
+    {
+        lua_pushstring(ls, kit->id);
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Run the main loop's before-command hook (dcc_before_command(): the
+ * re-roll and kit prompts, then the quest offer). Headless scripts are
+ * never asked, so this shows the hook is inert there. Script/test only.
+ * @function before_command
+ */
+LUAFN(dcc_before_command_lua)
+{
+    if (!_dcc_script_only(ls, "before_command"))
+        return 0;
+    dcc_before_command();
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -2098,6 +2139,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "give_kit", dcc_give_kit_lua },
 { "kit", dcc_kit_lua },
 { "reset_kit", dcc_reset_kit_lua },
+{ "kit_pending", dcc_kit_pending_lua },
+{ "kit_offer", dcc_kit_offer_lua },
+{ "before_command", dcc_before_command_lua },
 { nullptr, nullptr }
 };
 
