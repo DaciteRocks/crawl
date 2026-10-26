@@ -14,13 +14,15 @@ module "dcc"
 #include "dcc-achieve.h"
 #include "dcc-boxes.h"
 #include "dcc-clock.h"
+#include "dcc-quest.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
 #include "coord.h"
 #include "delay.h" // handle_delay, stop_delay
 #include "coordit.h"
-#include "dungeon.h"
+#include "dungeon.h" // run_map_epilogues
 #include "dgn-event.h" // dungeon_events
+#include "english.h" // pluralise_monster
 #include "env.h"
 #include "god-item.h" // god_forbids_item
 #include "items.h" // stack_iterator
@@ -1079,6 +1081,193 @@ LUAFN(dcc_free_item_slots_lua)
     PLUARET(number, dcc_free_item_slots());
 }
 
+/*** Print an Announcer line (MSGCH_DCC). It interrupts the player's
+ * activity, as every Announcer line does.
+ * @tparam string text
+ * @function announce
+ */
+LUAFN(dcc_announce_lua)
+{
+    const string text = luaL_checkstring(ls, 1);
+    if (crawl_state.game_is_dcc())
+        dcc_announce(text);
+    return 0;
+}
+
+/*** A floor's quest state (dat/dlua/dcc_quests.lua): the table kept in
+ * dgn.persist for it, or nil if the floor has no quest. The table's fields
+ * include kind ("kill", "fetch", "reach" or "survive"), text, tier, done
+ * and expired.
+ * @tparam[opt] string place a level_id::describe() name; default the
+ *   current level
+ * @treturn table|nil
+ * @function quest_state
+ */
+LUAFN(dcc_quest_state_lua)
+{
+    const string place = lua_isnoneornil(ls, 1)
+                         ? level_id::current().describe()
+                         : string(luaL_checkstring(ls, 1));
+    lua_getglobal(ls, "dgn");
+    if (!lua_istable(ls, -1))
+        return 0;
+    lua_getfield(ls, -1, "persist");
+    if (!lua_istable(ls, -1))
+        return 0;
+    lua_getfield(ls, -1, DCC_QUESTS_PERSIST_KEY);
+    if (!lua_istable(ls, -1))
+        return 0;
+    lua_getfield(ls, -1, place.c_str());
+    if (!lua_istable(ls, -1))
+        return 0;
+    return 1;
+}
+
+/*** A quest target cell for the current level (dcc_quest_spot()): plain
+ * empty floor outside vaults and safe rooms that the player can walk to
+ * from (x, y), at least percent% of the farthest such cell's walking
+ * distance away.
+ * @tparam int x
+ * @tparam int y
+ * @tparam int percent
+ * @treturn int|nil x
+ * @treturn int|nil y
+ * @function quest_spot
+ */
+LUAFN(dcc_quest_spot_lua)
+{
+    const coord_def from(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    const int percent = luaL_safe_checkint(ls, 3);
+    coord_def spot;
+    if (!dcc_quest_spot(from, percent, spot))
+        return 0;
+    lua_pushinteger(ls, spot.x);
+    lua_pushinteger(ls, spot.y);
+    return 2;
+}
+
+/*** The monster types a kill quest could ask for on the current level
+ * (dcc_quest_kill_targets()), sorted by type.
+ * @treturn table an array of { name = string, plural = string,
+ *   count = int }
+ * @function quest_kill_targets
+ */
+LUAFN(dcc_quest_kill_targets_lua)
+{
+    const vector<dcc_kill_target> targets = dcc_quest_kill_targets();
+    lua_newtable(ls);
+    int i = 0;
+    for (const dcc_kill_target &target : targets)
+    {
+        const string name = mons_type_name(target.type, DESC_PLAIN);
+        lua_newtable(ls);
+        lua_pushstring(ls, name.c_str());
+        lua_setfield(ls, -2, "name");
+        lua_pushstring(ls, pluralise_monster(name).c_str());
+        lua_setfield(ls, -2, "plural");
+        lua_pushinteger(ls, target.count);
+        lua_setfield(ls, -2, "count");
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** If the death of the monster with this mid counted as the player's (or
+ * an ally's) kill, its type name, as quest_kill_targets() names it; nil
+ * otherwise. For the kill quest's DET_MONSTER_DIED listener.
+ * @tparam int mid the event's arg1
+ * @treturn string|nil
+ * @function quest_kill_name
+ */
+LUAFN(dcc_quest_kill_name_lua)
+{
+    const monster_type type = dcc_quest_kill_type(luaL_safe_checkint(ls, 1));
+    if (type == MONS_NO_MONSTER)
+        return 0;
+    PLUARET(string, mons_type_name(type, DESC_PLAIN).c_str());
+}
+
+/*** A floor quest is complete: award its box, count it and check the
+ * achievements (dcc_quest_reward()). Does nothing outside Crawl Live.
+ * @tparam string tier the box tier
+ * @function quest_reward
+ */
+LUAFN(dcc_quest_reward_lua)
+{
+    dcc_quest_reward(_dcc_tier_arg(ls, 1));
+    return 0;
+}
+
+/*** How many floor quests the player has completed.
+ * @treturn int
+ * @function quests_done
+ */
+LUAFN(dcc_quests_done_lua)
+{
+    PLUARET(number, dcc_quests_done());
+}
+
+/*** Run the level's map epilogues, as arriving on a new level does
+ * (load_level() runs run_map_epilogues()); test.regenerate_level() does
+ * not, so without this a script's level has no quest. Script/test only.
+ * @function run_epilogues
+ */
+LUAFN(dcc_run_epilogues_lua)
+{
+    if (!_dcc_script_only(ls, "run_epilogues"))
+        return 0;
+    run_map_epilogues();
+    return 0;
+}
+
+/*** Fire one DET_TURN_ELAPSED dungeon event of this many aut, as a player
+ * turn does (run_environment_effects()). Script/test only.
+ * @tparam int aut
+ * @function fire_turn
+ */
+LUAFN(dcc_fire_turn_lua)
+{
+    const int aut = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "fire_turn"))
+        return 0;
+    dungeon_events.fire_event(dgn_event(DET_TURN_ELAPSED, coord_def(), aut));
+    return 0;
+}
+
+/*** Set the player's HP (1 up to max HP). Script/test only.
+ * @tparam int hp
+ * @function set_hp
+ */
+LUAFN(dcc_set_hp_lua)
+{
+    const int hp = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "set_hp"))
+        return 0;
+    set_hp(max(1, min(hp, you.hp_max)));
+    return 0;
+}
+
+/*** Pick up every item on the player's cell into the pack, through
+ * move_item_to_inv() (which fires DET_ITEM_PICKUP), as the pickup command
+ * does. Script/test only.
+ * @treturn int how many items went into the pack
+ * @function pick_up
+ */
+LUAFN(dcc_pick_up_lua)
+{
+    if (!_dcc_script_only(ls, "pick_up"))
+        return 0;
+    vector<int> here;
+    for (stack_iterator si(you.pos()); si; ++si)
+        here.push_back(si->index());
+    for (int obj : here)
+        move_item_to_inv(obj, env.item[obj].quantity, true);
+    int left = 0;
+    for (stack_iterator si(you.pos()); si; ++si)
+        ++left;
+    PLUARET(number, static_cast<int>(here.size()) - left);
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1134,6 +1323,17 @@ static const struct luaL_Reg dcc_dlib[] =
 { "box_item_count", dcc_box_item_count_lua },
 { "box_open_turns", dcc_box_open_turns_lua },
 { "free_item_slots", dcc_free_item_slots_lua },
+{ "announce", dcc_announce_lua },
+{ "quest_state", dcc_quest_state_lua },
+{ "quest_spot", dcc_quest_spot_lua },
+{ "quest_kill_targets", dcc_quest_kill_targets_lua },
+{ "quest_kill_name", dcc_quest_kill_name_lua },
+{ "quest_reward", dcc_quest_reward_lua },
+{ "quests_done", dcc_quests_done_lua },
+{ "run_epilogues", dcc_run_epilogues_lua },
+{ "fire_turn", dcc_fire_turn_lua },
+{ "pick_up", dcc_pick_up_lua },
+{ "set_hp", dcc_set_hp_lua },
 { nullptr, nullptr }
 };
 

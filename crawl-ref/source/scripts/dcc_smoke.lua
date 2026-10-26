@@ -1365,3 +1365,262 @@ you.moveto(kx, ky)
 check(dcc.box_count() == 1 and dcc.at_kiosk(), "on a fresh level")
 ok, why = dcc.open_boxes()
 check(ok and dcc.box_count() == 0, "the sealed box opens once there is room")
+
+-- Phase 5a: floor quests. In a function of its own: the main chunk is close
+-- to Lua's limit on local variables.
+local function phase5a()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local function kiosk()
+    return dgn.find_marker_position_by_prop("dcc_kiosk", "1")
+  end
+  -- Plain empty floor outside the safe room, in map order.
+  local function outside_cells()
+    local cells = {}
+    for y = 1, dgn.GYM - 2 do
+      for x = 1, dgn.GXM - 2 do
+        if dgn.feature_name(dgn.grid(x, y)) == "floor"
+           and not dcc.is_safe_cell(x, y) and dgn.mons_at(x, y) == nil
+           and #dgn.items_at(x, y) == 0 then
+          table.insert(cells, { x = x, y = y })
+        end
+      end
+    end
+    return cells
+  end
+  local function clear_monsters()
+    for y = 1, dgn.GYM - 2 do
+      for x = 1, dgn.GXM - 2 do
+        if dgn.mons_at(x, y) then
+          dcc.remove_monster(x, y, "reset")
+        end
+      end
+    end
+  end
+  -- A freshly built D:1 as the player first arrives on it: markers active,
+  -- the player outside the safe room, epilogues not yet run.
+  local function new_floor()
+    debug.goto_place("D:1")
+    test.regenerate_level()
+    dcc.start_floor_clock()
+    dcc.activate_markers()
+    local c = outside_cells()[1]
+    you.moveto(c.x, c.y)
+  end
+
+  -- Every achievement already unlocked, so no kill or arrival here earns a
+  -- box of its own: every box below is a quest's.
+  for _, ach in ipairs(dcc.achievement_table()) do
+    dcc.unlock(ach.id)
+  end
+
+  -- Arriving on a floor sets up its quest: one of the four kinds, active,
+  -- announced, and tracked by a marker.
+  new_floor()
+  mark()
+  dcc.run_epilogues()
+  local q = dcc.quest_state()
+  check(type(q) == "table", "D:1 has a quest once its safe room's epilogue runs")
+  local kinds = { kill = true, fetch = true, reach = true, survive = true }
+  check(kinds[q.kind] == true, "the quest is one of the four kinds ("
+        .. tostring(q.kind) .. ")")
+  check(q.done == false and q.expired == false, "the new quest is not done")
+  check(q.tier == "Bronze", "a D:1 quest pays a Bronze box (" .. q.tier .. ")")
+  check(said("Floor quest:"), "the Announcer states the quest")
+  check(dcc_quest_debug().marker() ~= nil, "a quest marker tracks it")
+  check(dcc.quest_state("D:2") == nil, "a floor not yet reached has no quest")
+  -- Each kind sets up on a normal floor (survive is also every fallback).
+  for kind in pairs(kinds) do
+    dcc_quest_debug().setup(kind)
+    check(dcc.quest_state().kind == kind, "a " .. kind .. " quest sets up")
+  end
+
+  -- Kill: the target is a type living on the floor, N is capped by how
+  -- many there are, and only the player's (or an ally's) kills of that
+  -- type count.
+  clear_monsters()
+  local cells = outside_cells()
+  local n = #cells
+  check(n > 40, "D:1 has open floor outside the safe room (" .. n .. ")")
+  you.moveto(cells[1].x, cells[1].y)
+  local goblins = {}
+  for i = 1, 5 do
+    local c = cells[n - i * 4]
+    local m = dgn.create_monster(c.x, c.y, "goblin")
+    check(m ~= nil, "goblin " .. i .. " is placed")
+    local gx, gy = mpos(m)
+    table.insert(goblins, { x = gx, y = gy })
+  end
+  dcc_quest_debug().setup("kill")
+  q = dcc.quest_state()
+  check(q.kind == "kill" and q.target == "goblin" and q.need == 3,
+        "a kill quest asks for three of the floor's goblins ("
+        .. tostring(q.target) .. " x" .. tostring(q.need) .. ")")
+  check(q.text:find("Kill 3 goblins", 1, true) ~= nil,
+        "and says so (" .. q.text .. ")")
+  local boxes = dcc.box_count()
+  local done = dcc.quests_done()
+  local jc = cells[n - 30]
+  local jackal = dgn.create_monster(jc.x, jc.y, "jackal")
+  check(jackal ~= nil, "a jackal is placed")
+  check(dcc.kill(mpos(jackal)), "the player kills the jackal")
+  check(q.have == 0, "a jackal does not count toward goblins")
+  dcc.remove_monster(goblins[1].x, goblins[1].y, "banished")
+  check(q.have == 0, "a banished goblin does not count")
+  mark()
+  check(dcc.kill(goblins[2].x, goblins[2].y), "the player kills a goblin")
+  check(q.have == 1 and said("1 of 3 goblins down"),
+        "a goblin kill counts, and the Announcer keeps score")
+  dcc.kill(goblins[3].x, goblins[3].y)
+  check(not q.done and dcc.box_count() == boxes, "two of three: not yet")
+  mark()
+  dcc.kill(goblins[4].x, goblins[4].y)
+  check(q.done and dcc.box_count() == boxes + 1,
+        "the third goblin completes the quest and awards a box")
+  check(dcc.boxes()[dcc.box_count()] == "Bronze", "a Bronze box")
+  check(said("Quest complete"), "the Announcer calls the quest complete")
+  check(dcc.quests_done() == done + 1, "the completed quest is counted")
+  dcc.kill(goblins[5].x, goblins[5].y)
+  check(dcc.box_count() == boxes + 1, "a done quest awards nothing more")
+
+  -- The phase gate: a kill quest force-completed by the debug helper.
+  local g = dgn.create_monster(cells[n - 40].x, cells[n - 40].y, "goblin")
+  check(g ~= nil, "another goblin is placed")
+  dcc_quest_debug().setup("kill")
+  q = dcc.quest_state()
+  check(q.kind == "kill" and q.done == false, "a fresh kill quest")
+  boxes = dcc.box_count()
+  check(dcc_quest_debug().force_complete(), "force_complete() completes it")
+  check(dcc.box_count() == boxes + 1 and dcc.quest_state().done == true,
+        "force_complete() awards the box and marks the quest done")
+  check(not dcc_quest_debug().force_complete(), "and only once")
+
+  -- Reach: a far plain floor cell outside the safe room; stepping
+  -- elsewhere does nothing, standing on it completes the quest.
+  dcc_quest_debug().setup("reach")
+  q = dcc.quest_state()
+  check(q.kind == "reach" and q.x and q.y, "a reach quest has a target cell")
+  check(dgn.feature_name(dgn.grid(q.x, q.y)) == "floor"
+        and not dcc.is_safe_cell(q.x, q.y),
+        "the target is plain floor outside the safe room")
+  local kx, ky = kiosk()
+  check(math.max(math.abs(q.x - kx), math.abs(q.y - ky)) > 5,
+        "and not next to the safe room")
+  check(q.text:find("squares to the", 1, true) ~= nil,
+        "the Announcer says which way (" .. q.text .. ")")
+  boxes = dcc.box_count()
+  you.moveto(cells[1].x, cells[1].y)
+  check(not q.done, "standing elsewhere does not complete it")
+  -- The quest marker survives the level's save and reload, and still
+  -- listens at the target cell.
+  check(dcc.markers_roundtrip() > 0, "the level's markers make a round trip")
+  check(dcc_quest_debug().marker() ~= nil, "the quest marker is read back")
+  you.moveto(q.x, q.y)
+  check(q.done and dcc.box_count() == boxes + 1,
+        "after the round trip, reaching the cell completes the quest")
+
+  -- Fetch: a flagged item on a far cell; picking it up there completes
+  -- the quest, and the item is the player's to keep.
+  you.moveto(cells[1].x, cells[1].y)
+  dcc_quest_debug().setup("fetch")
+  q = dcc.quest_state()
+  check(q.kind == "fetch" and #dgn.items_at(q.x, q.y) == 1,
+        "a fetch quest places its item (" .. tostring(q.item) .. ")")
+  check(dgn.item_property(dgn.items_at(q.x, q.y)[1], "dcc_quest_item", "s")
+        == "D:1", "the item is flagged for D:1's quest")
+  boxes = dcc.box_count()
+  you.moveto(q.x, q.y)
+  check(not q.done, "standing on the item is not enough")
+  check(dcc.pick_up() == 1, "the player picks the item up")
+  check(q.done and dcc.box_count() == boxes + 1,
+        "picking it up completes the quest")
+  local flagged = 0
+  for _, it in ipairs(items.inventory()) do
+    if dgn.item_property(it, "dcc_quest_item", "s") then
+      flagged = flagged + 1
+    end
+  end
+  check(flagged == 0, "the kept item is no longer flagged")
+
+  -- Survive: turns off the safe room's cells with HP at half or more; a
+  -- drop below half starts the count over, safe cells do not count, and
+  -- one long event counts as at most 100 aut.
+  dcc_quest_debug().setup("survive")
+  q = dcc.quest_state()
+  check(q.kind == "survive" and q.need == 150, "a D:1 survive quest is 150 turns")
+  boxes = dcc.box_count()
+  local _, mhp = you.hp()
+  dcc.set_hp(mhp)
+  you.moveto(cells[1].x, cells[1].y)
+  for i = 1, 5 do
+    dcc.fire_turn(100)
+  end
+  check(q.have_aut == 500, "five 10-turn events count 50 turns (" .. q.have_aut .. ")")
+  dcc.fire_turn(5000)
+  check(q.have_aut == 600, "a long catch-up event counts at most 10 turns")
+  local rx, ry
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      if not rx and dcc.is_safe_cell(x, y)
+         and dgn.feature_name(dgn.grid(x, y)) == "floor"
+         and not (x == kx and y == ky) then
+        rx, ry = x, y
+      end
+    end
+  end
+  you.moveto(rx, ry)
+  dcc.fire_turn(100)
+  check(q.have_aut == 600, "turns in the safe room do not count")
+  you.moveto(cells[1].x, cells[1].y)
+  dcc.set_hp(math.floor((mhp - 1) / 2))
+  mark()
+  dcc.fire_turn(100)
+  check(q.have_aut == 0 and said("survival count starts over"),
+        "dropping below half health starts the count over")
+  dcc.set_hp(mhp)
+  for i = 1, 14 do
+    dcc.fire_turn(100)
+  end
+  check(not q.done, "149 turns: not yet")
+  dcc.fire_turn(100)
+  check(q.done and dcc.box_count() == boxes + 1,
+        "150 turns above half health complete the quest")
+
+  -- Fetch, settled at the next floor: an item left behind expires the
+  -- quest silently; one in the pack (picked up off its cell, say from a
+  -- monster that carried it off) completes it on arrival.
+  new_floor()
+  dcc.run_epilogues()
+  dcc_quest_debug().setup("fetch")
+  q = dcc.quest_state()
+  boxes = dcc.box_count()
+  debug.goto_place("D:2")
+  mark()
+  dcc.enter_floor(true)
+  check(q.expired and not q.done and dcc.box_count() == boxes,
+        "a fetch item left on D:1 expires its quest on reaching D:2")
+  check(not said("Quest complete"), "silently")
+
+  new_floor()
+  dcc.run_epilogues()
+  dcc_quest_debug().setup("fetch")
+  q = dcc.quest_state()
+  local ix, iy = q.x, q.y
+  local it = dgn.items_at(ix, iy)[1]
+  local c = outside_cells()[1]
+  -- Carried off: move the flagged item to another cell, as a monster
+  -- dropping it would, and pick it up there.
+  dgn.create_item(c.x, c.y, DCC_QUEST_FETCH_ITEM)
+  dgn.item_property_set(dgn.items_at(c.x, c.y)[1], "dcc_quest_item", "s", "D:1")
+  dgn.item_property_remove(it, "dcc_quest_item")
+  you.moveto(c.x, c.y)
+  dcc.pick_up()
+  check(not q.done, "picking the item up off its cell does not complete it")
+  boxes = dcc.box_count()
+  debug.goto_place("D:2")
+  dcc.enter_floor(true)
+  check(q.done and dcc.box_count() == boxes + 1,
+        "holding the item on reaching D:2 completes D:1's fetch quest")
+end
+phase5a()
