@@ -3036,11 +3036,16 @@ local function phase6h()
     names[#names + 1] = it.name()
   end
   local all = table.concat(names, "; ")
-  -- Unidentified jewellery and consumables show only their looks.
-  check(all:find("long sword", 1, true) and all:find("kite shield", 1, true)
-        and all:find("book of Flames", 1, true)
-        and all:find("robe", 1, true) and all:find("ring", 1, true),
-        "the kits hold what the table says (" .. all .. ")")
+  -- Kit items arrive identified, so the real names show.
+  for _, want in ipairs({ "long sword", "scale mail", "kite shield",
+                          "potions of might", "book of Flames",
+                          "robe of resistance", "ring of magical power",
+                          "potions of magic", "potions of heal wounds",
+                          "scrolls of blinking", "scrolls of teleportation",
+                          "potions of haste" }) do
+    check(all:find(want, 1, true) ~= nil, "a kit item reads \"" .. want
+          .. "\" (" .. all .. ")")
+  end
 
   local level_items = items_around(x, y)
   mark()
@@ -3051,6 +3056,43 @@ local function phase6h()
   check(not said("Kit delivered"), "a refused kit says nothing")
   dcc.save_roundtrip()
   check(dcc.kit() == last, "the given kit survives a save round trip")
+
+  -- Over lava (a flyer) the kit lands on the nearest plain floor in
+  -- sight, never in the lava.
+  test.regenerate_level()
+  x, y = bare_outside_cell()
+  check(x ~= nil, "a bare floor cell for the lava checks")
+  you.moveto(x, y)
+  local lava = dgn.find_feature_number("lava")
+  dgn.grid(x, y, lava)
+  mark()
+  check(dcc.give_kit("supplies", true), "a kit is given over lava")
+  check(#dgn.items_at(x, y) == 0, "nothing lands in the lava")
+  check(items_around(x, y) == 4, "the kit lands on a cell next to the "
+        .. "lava (" .. items_around(x, y) .. ")")
+  for dy = -1, 1 do
+    for dx = -1, 1 do
+      if #dgn.items_at(x + dx, y + dy) > 0 then
+        check(dgn.feature_name(dgn.grid(x + dx, y + dy)) == "floor",
+              "the kit's cell is plain floor")
+      end
+    end
+  end
+  -- A lake of lava as far as the player can see: nowhere to put the kit.
+  for yy = math.max(1, y - 9), math.min(dgn.GYM - 2, y + 9) do
+    for xx = math.max(1, x - 9), math.min(dgn.GXM - 2, x + 9) do
+      dgn.grid(xx, yy, lava)
+    end
+  end
+  local before_lake = items_on_level()
+  dcc.reset_kit()
+  mark()
+  check(not dcc.give_kit("steel"), "over a lake of lava the kit jams")
+  check(said("stuck in the chute") and said("nowhere here"),
+        "the Announcer explains there is nowhere to put it")
+  check(not said("Kit delivered"), "and delivers nothing")
+  check(items_on_level() == before_lake, "no item is made")
+  check(dcc.kit() == nil, "the jam does not spend the one kit")
 
   test.regenerate_level()
   debug.goto_place("D:1")
