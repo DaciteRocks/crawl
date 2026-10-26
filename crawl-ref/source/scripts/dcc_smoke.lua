@@ -1731,7 +1731,9 @@ local function phase5b()
     if seen == 4 then
       break
     end
-    debug.goto_place(i % 2 == 0 and "D:3" or "D:7")
+    -- (D:3 has its own, larger variants since Phase 6e; phase6e() checks
+    -- their steward.)
+    debug.goto_place(i % 2 == 0 and "D:4" or "D:7")
     test.regenerate_level()
     local v = (debug.vault_names() or ""):match("dcc_safe_room_(%a)")
     check(v ~= nil, "a safe room is placed (" .. i .. ")")
@@ -2424,3 +2426,70 @@ local function phase6d()
   check(dcc.floor_turns_total() == 1500, "unthemed D:1 keeps its 1500 turns")
 end
 phase6d()
+
+-- Phase 6e: the sponsor booth. D:3's safe room is one of four larger
+-- variants holding three altars of distinct temple gods the player could
+-- join (not their own); every other floor keeps the plain rooms.
+local function phase6e()
+  local function room_name()
+    return (debug.vault_names() or ""):match("dcc_safe_room[%w_]*") or ""
+  end
+  local function build(place)
+    debug.goto_place(place)
+    test.regenerate_level()
+    return room_name()
+  end
+  local demigod = you.race() == "Demigod"
+  if demigod then
+    print("dcc_smoke: the player is a Demigod; booth god checks skipped")
+  end
+
+  for i = 1, 3 do
+    local name = build("D:3")
+    check(name:find("^dcc_safe_room_sponsor_") ~= nil,
+          "D:3's safe room is a sponsor variant (" .. name .. ")")
+    local sx, sy = dcc.steward_pos()
+    check(sx ~= nil and dcc.is_safe_cell(sx, sy),
+          name .. " holds the Floor Steward on a safe cell")
+    local altars = dcc.sponsor_altars()
+    if not demigod then
+      check(#altars == 3, "D:3's booth holds three altars (" .. #altars
+            .. ", build " .. i .. ")")
+      local gods = {}
+      for _, a in ipairs(altars) do
+        check(not gods[a.god], "booth god " .. a.god .. " appears once")
+        gods[a.god] = true
+        check(a.god ~= you.god(), "the booth leaves out the player's god")
+        check(dcc.is_safe_cell(a.x, a.y),
+              "the " .. a.god .. " altar is a safe cell")
+        check(dgn.feature_name(dgn.grid(a.x, a.y)):find("^altar_") ~= nil,
+              "the " .. a.god .. " booth cell is an altar")
+      end
+    end
+  end
+
+  for _, place in ipairs({ "D:2", "D:4", "D:1" }) do
+    local name = build(place)
+    check(name ~= "" and not name:find("sponsor"),
+          place .. "'s safe room is a plain variant (" .. name .. ")")
+    check(#dcc.sponsor_altars() == 0, place .. " has no sponsor altars")
+  end
+
+  -- The player's own god is never a sponsor.
+  if not demigod then
+    local before = you.god()
+    dcc.set_god("Xom")
+    for i = 1, 3 do
+      build("D:3")
+      local altars = dcc.sponsor_altars()
+      check(#altars == 3, "a Xom worshipper's booth still holds three altars")
+      for _, a in ipairs(altars) do
+        check(a.god ~= "Xom", "a Xom worshipper's booth has no Xom altar")
+      end
+    end
+    dcc.set_god(before == "No God" and "" or before)
+    check(you.god() == before, "the player's god is restored (" .. you.god()
+          .. ")")
+  end
+end
+phase6e()
