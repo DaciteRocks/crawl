@@ -30,10 +30,6 @@
 // How many cells dcc_place_boss() tries before it gives up.
 static const int DCC_BOSS_PLACE_TRIES = 10;
 
-// How far out the boss stands: at least this percent of the farthest good
-// spot's walking distance from the arrival.
-static const int DCC_BOSS_FAR_PERCENT = 60;
-
 static const vector<dcc_boss> _boss_table =
 {
     { BRANCH_DUNGEON, 3, "the Opening Act", "ogre",
@@ -111,10 +107,11 @@ int dcc_boss_count()
  * Place the current floor's boss, if it has one and does not hold it
  * already: on a far reachable cell from where the player stands (the safe
  * room, on a stair arrival), outside vaults where the level has room;
- * on encompass maps (Zot:5), where every cell is a vault cell, anywhere
- * reachable. Called on the first arrival on a connected floor
- * (dcc_enter_floor()); a boss already on the level means a revisit or a
- * rebuild, so nothing is placed.
+ * on encompass maps (Zot:5), where every cell is a vault cell, inside one.
+ * Either way it is at least DCC_BOSS_FAR_PERCENT of the farthest good
+ * spot's walking distance away. Called on the first arrival on a
+ * connected floor (dcc_enter_floor()); a boss already on the level means a
+ * revisit or a rebuild, so nothing is placed.
  *
  * @return The boss placed, or nullptr.
  */
@@ -139,8 +136,11 @@ monster *dcc_place_boss()
     for (int i = 0; i < DCC_BOSS_PLACE_TRIES; ++i)
     {
         coord_def spot;
+        // Both searches keep the distance rule. A lower percent would not
+        // help: dcc_quest_spot() fails only when no good spot is reachable
+        // at all (the farthest one always qualifies).
         if (!dcc_quest_spot(you.pos(), DCC_BOSS_FAR_PERCENT, spot)
-            && !dcc_quest_spot(you.pos(), 0, spot, true))
+            && !dcc_quest_spot(you.pos(), DCC_BOSS_FAR_PERCENT, spot, true))
         {
             break;
         }

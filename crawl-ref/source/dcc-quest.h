@@ -34,6 +34,8 @@ struct dcc_kill_target
 
 bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot,
                     bool vaults_ok = false);
+int dcc_quest_walk_distance(const coord_def &from, const coord_def &to,
+                            bool vaults_ok, int &far);
 vector<dcc_kill_target> dcc_quest_kill_targets(mid_t exclude = MID_NOBODY);
 void dcc_quest_kill_counted(const monster &mons);
 monster_type dcc_quest_kill_type(int mid);

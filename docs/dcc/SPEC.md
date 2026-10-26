@@ -157,7 +157,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 4b | Loot boxes and the kiosk | done 2026-10-25 |
 | 5a | Quest engine (Lua, four objective kinds) | done 2026-10-25 |
 | 5b | Quest giver NPC and offer flow | done 2026-10-25 |
-| 6a | Boss placement | not started |
+| 6a | Boss placement | done 2026-10-25 |
 | 6b | Boss intro, kill achievement and box | not started |
 | 6c | Theme assignment and Announcer blurb | not started |
 | 6d | Themes bite: monsters, colours, clock, quest tier | not started |
@@ -791,7 +791,7 @@ predecessor in the pair or triple.
 `dcc_boss` prop is placed far from the safe room on first arrival at D:3,
 D:6, D:9, D:12 and Zot:5 (`dcc-boss.cc`, called from `dcc_enter_floor`);
 kill quests never target it. ~8 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6b — Boss intro, kill achievement and box
 `docs/dcc/phases/6b-boss-intro-kill.md`. The Announcer introduces a boss on

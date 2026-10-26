@@ -299,3 +299,25 @@ New trunk hooks planned (one guarded line each): `player-notices.cc`
 renamed `main.cc` call (6i). Nine open questions with defaults are listed
 in SPEC.md under "Open questions for Phase 6"; phases proceed under the
 defaults.
+
+## 2026-10-25 — Phase 6a done
+
+Landed: `dcc-boss.cc` holds five bosses (D:3, D:6, D:9, D:12, Zot:5; des
+MONS specs, names, and 6b's intro/death lines and achievement ids). A
+connected floor's first arrival places its boss, hostile, with the
+`dcc_boss` prop, on a reachable cell at least 60% of the farthest good
+spot's walking distance from the arrival; a floor already holding its boss
+gets none. Kill quests never target a boss. New dlua `dcc.boss_floors()`,
+`dcc.boss_pos()`, `dcc.boss_count()`, `dcc.boss_far_percent()`,
+`dcc.walk_distance()`; `dcc.quest_spot()` takes an optional `vaults_ok`. No
+trunk files touched. Reviewers changed:
+- the encompass fallback (`vaults_ok`) keeps the 60% distance rule instead
+  of allowing any reachable cell (a lower percent never helps:
+  `dcc_quest_spot()` fails only when no spot is reachable at all);
+- a boss's death gives no kill-quest credit (`dcc_quest_kill_counted()`),
+  matching its exclusion from the targets;
+- the smoke checks each boss's walking distance from the arrival and that
+  it stands on a vault cell exactly when the level has no far spot outside
+  vaults; the `vaults_ok` search is tested directly on Dis:7 (always
+  encompass; Zot:5 is encompass only for some layouts); a boss kill against
+  an ogre kill quest; the misnamed "rebuild" check is relabelled.

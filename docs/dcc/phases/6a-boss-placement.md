@@ -121,4 +121,22 @@ hostile. Descend and return: there is still exactly one.
 - On Zot:5 the relaxed spot search can land next to the Orb chamber's
   guardians; accepted (it is the last floor).
 
-Status: not started
+## As built (deviations from the text above)
+
+- The `dcc_place_boss()` call in `dcc_enter_floor()` sits in its own
+  `if (just_created && is_connected_branch(here))`, not inside the quest
+  block, whose extra `old_place != here` test would skip a newly built floor
+  with the same name as the one left. `dcc_place_boss()` itself places
+  nothing on a level that already holds a boss.
+- `dcc.boss_pos()` returns the name as seen (`name(DESC_THE, true)`) even
+  when the player cannot see the boss; unseen it would read "something".
+- The `vaults_ok` fallback keeps the 60% rule (`DCC_BOSS_FAR_PERCENT` in
+  `dcc-boss.h`); there is no further fallback, since `dcc_quest_spot()` with
+  any percent fails only when no spot is reachable at all.
+- A boss kill gives no kill-quest credit (`dcc_quest_kill_counted()`).
+- Zot:5 is an encompass map only for some orb-chamber layouts, so the
+  smoke cannot rely on it for the `vaults_ok` path: it checks that a boss
+  stands on a vault cell exactly when the level has no far spot outside
+  vaults, and tests the `vaults_ok` search directly on Dis:7.
+
+Status: done 2026-10-25

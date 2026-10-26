@@ -77,6 +77,59 @@ static bool _good_quest_spot(const coord_def &c, bool vaults_ok)
 }
 
 /**
+ * Walking distances from `from` over cells the player can walk.
+ *
+ * @param from      Where the walk starts (in bounds).
+ * @param vaults_ok As dcc_quest_spot().
+ * @param[out] dist Each cell's distance, -1 where the walk cannot reach.
+ * @return The distance of the farthest good quest spot reached, 0 if none.
+ */
+static int _quest_distances(const coord_def &from, bool vaults_ok,
+                            FixedArray<int, GXM, GYM> &dist)
+{
+    queue<coord_def> todo;
+    dist(from) = 0;
+    todo.push(from);
+    int far_dist = 0;
+    while (!todo.empty())
+    {
+        const coord_def c = todo.front();
+        todo.pop();
+        if (_good_quest_spot(c, vaults_ok))
+            far_dist = max(far_dist, dist(c));
+        for (adjacent_iterator ai(c); ai; ++ai)
+        {
+            if (!in_bounds(*ai) || dist(*ai) >= 0 || !_quest_walkable(*ai))
+                continue;
+            dist(*ai) = dist(c) + 1;
+            todo.push(*ai);
+        }
+    }
+    return far_dist;
+}
+
+/**
+ * The walking distance between two cells, as dcc_quest_spot() measures it,
+ * and the distance of the farthest good quest spot from `from`.
+ *
+ * @param from      Where the walk starts.
+ * @param to        Where it ends.
+ * @param vaults_ok As dcc_quest_spot().
+ * @param[out] far  The farthest good spot's distance, 0 if none.
+ * @return The distance, or -1 if `to` cannot be reached.
+ */
+int dcc_quest_walk_distance(const coord_def &from, const coord_def &to,
+                            bool vaults_ok, int &far)
+{
+    far = 0;
+    if (!in_bounds(from) || !in_bounds(to))
+        return -1;
+    FixedArray<int, GXM, GYM> dist(-1);
+    far = _quest_distances(from, vaults_ok, dist);
+    return dist(to);
+}
+
+/**
  * Pick a quest target cell: walking distance from `from` (the safe room's
  * kiosk) over cells the player can walk, among the good spots at least
  * `percent` percent of the farthest good spot's distance away, uniformly.
@@ -97,24 +150,7 @@ bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot,
     percent = max(0, min(100, percent));
 
     FixedArray<int, GXM, GYM> dist(-1);
-    queue<coord_def> todo;
-    dist(from) = 0;
-    todo.push(from);
-    int far_dist = 0;
-    while (!todo.empty())
-    {
-        const coord_def c = todo.front();
-        todo.pop();
-        if (_good_quest_spot(c, vaults_ok))
-            far_dist = max(far_dist, dist(c));
-        for (adjacent_iterator ai(c); ai; ++ai)
-        {
-            if (!in_bounds(*ai) || dist(*ai) >= 0 || !_quest_walkable(*ai))
-                continue;
-            dist(*ai) = dist(c) + 1;
-            todo.push(*ai);
-        }
-    }
+    const int far_dist = _quest_distances(from, vaults_ok, dist);
     if (far_dist <= 0)
         return false;
 
@@ -183,6 +219,14 @@ static monster_type _last_kill_type = MONS_NO_MONSTER;
  */
 void dcc_quest_kill_counted(const monster &mons)
 {
+    // A floor boss is never a kill quest's target (dcc_quest_kill_targets()),
+    // so its death is no credit toward one either.
+    if (dcc_is_boss(mons))
+    {
+        _last_kill_mid = MID_NOBODY;
+        _last_kill_type = MONS_NO_MONSTER;
+        return;
+    }
     _last_kill_mid = mons.mid;
     _last_kill_type = mons.type;
 }

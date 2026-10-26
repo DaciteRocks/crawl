@@ -1146,6 +1146,8 @@ LUAFN(dcc_quest_state_lua)
  * @tparam int x
  * @tparam int y
  * @tparam int percent
+ * @tparam[opt] boolean vaults_ok allow cells inside vaults too, as a floor
+ *   boss on an encompass map needs
  * @treturn int|nil x
  * @treturn int|nil y
  * @function quest_spot
@@ -1154,8 +1156,9 @@ LUAFN(dcc_quest_spot_lua)
 {
     const coord_def from(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
     const int percent = luaL_safe_checkint(ls, 3);
+    const bool vaults_ok = lua_toboolean(ls, 4);
     coord_def spot;
-    if (!dcc_quest_spot(from, percent, spot))
+    if (!dcc_quest_spot(from, percent, spot, vaults_ok))
         return 0;
     lua_pushinteger(ls, spot.x);
     lua_pushinteger(ls, spot.y);
@@ -1372,6 +1375,41 @@ LUAFN(dcc_boss_count_lua)
     PLUARET(integer, dcc_boss_count());
 }
 
+/*** How far out a floor boss stands (DCC_BOSS_FAR_PERCENT): at least this
+ * percent of the farthest good quest spot's walking distance from the
+ * player's arrival.
+ * @treturn int
+ * @function boss_far_percent
+ */
+LUAFN(dcc_boss_far_percent_lua)
+{
+    PLUARET(integer, DCC_BOSS_FAR_PERCENT);
+}
+
+/*** The walking distance between two cells as dcc.quest_spot() measures it
+ * (dcc_quest_walk_distance()), and the farthest good quest spot's distance
+ * from the first.
+ * @tparam int x1
+ * @tparam int y1
+ * @tparam int x2
+ * @tparam int y2
+ * @tparam[opt] boolean vaults_ok count spots inside vaults as good
+ * @treturn int the distance, -1 if unreachable
+ * @treturn int the farthest good spot's distance, 0 if none
+ * @function walk_distance
+ */
+LUAFN(dcc_walk_distance_lua)
+{
+    const coord_def from(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    const coord_def to(luaL_safe_checkint(ls, 3), luaL_safe_checkint(ls, 4));
+    const bool vaults_ok = lua_toboolean(ls, 5);
+    int far = 0;
+    const int dist = dcc_quest_walk_distance(from, to, vaults_ok, far);
+    lua_pushinteger(ls, dist);
+    lua_pushinteger(ls, far);
+    return 2;
+}
+
 /*** The Floor Steward's cell is in view: note the quest offer for the main
  * loop (dcc_steward_seen()). The steward's function_in_los marker calls
  * this (dcc_steward_seen() in dat/dlua/dcc.lua).
@@ -1506,6 +1544,8 @@ static const struct luaL_Reg dcc_dlib[] =
 { "boss_floors", dcc_boss_floors_lua },
 { "boss_pos", dcc_boss_pos_lua },
 { "boss_count", dcc_boss_count_lua },
+{ "boss_far_percent", dcc_boss_far_percent_lua },
+{ "walk_distance", dcc_walk_distance_lua },
 { nullptr, nullptr }
 };
 
