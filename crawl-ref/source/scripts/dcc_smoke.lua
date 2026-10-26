@@ -584,3 +584,253 @@ check(vetoed, "outside Crawl Live placing a safe room is vetoed")
 debug.goto_place("Sewer")
 test.regenerate_level()
 check(safe_rooms_placed() == 0, "a portal vault gets no safe room")
+
+-- Phase 4a: achievements, the Announcer's unlock lines, and the box stub.
+local ach_table = dcc.achievement_table()
+check(#ach_table >= 16, "the achievement table has at least 16 entries ("
+      .. #ach_table .. ")")
+local seen_ids = {}
+local tiers = { Bronze = true, Silver = true, Gold = true, Platinum = true,
+                Legendary = true, Celestial = true }
+-- Names from the books that must never appear in game text.
+local banned = { "carl", "donut", "mordecai", "syndicate", "borant",
+                 "dungeon crawler" }
+for _, a in ipairs(ach_table) do
+  check(not seen_ids[a.id], "achievement id " .. a.id .. " is unique")
+  seen_ids[a.id] = true
+  check(a.name ~= "" and a.line ~= "", a.id .. " has a name and a line")
+  check(tiers[a.tier], a.id .. " awards a known box tier (" .. a.tier .. ")")
+  local text = (a.name .. " " .. a.line):lower()
+  for _, word in ipairs(banned) do
+    check(not text:find(word, 1, true),
+          a.id .. " uses no trademarked name (" .. word .. ")")
+  end
+end
+for _, id in ipairs({ "first_blood", "floor_2", "floor_4", "floor_6",
+                      "floor_8", "floor_10", "floor_12", "unique_1",
+                      "unique_3", "unique_5", "big_game", "kill_streak",
+                      "quick_exit", "fell_through", "signed", "xl_10",
+                      "xl_20", "rune_1", "rune_3", "orb" }) do
+  check(seen_ids[id], "the seed achievement " .. id .. " is in the table")
+end
+
+-- A level to fight on, with the player outside the safe room.
+debug.goto_place("D:3")
+test.regenerate_level()
+dcc.start_floor_clock()
+dcc.reset_achievements()
+
+local cursor = 0
+local function next_cell()
+  while true do
+    cursor = cursor + 1
+    local x = 2 + cursor % (dgn.GXM - 4)
+    local y = 2 + math.floor(cursor / (dgn.GXM - 4)) % (dgn.GYM - 4)
+    if dgn.feature_name(dgn.grid(x, y)) == "floor"
+       and not dcc.is_safe_cell(x, y) then
+      return x, y
+    end
+  end
+end
+local px, py = next_cell()
+you.moveto(px, py)
+-- Place a monster on the next free outside cell; returns its x, y.
+local function spawn(spec)
+  for i = 1, 200 do
+    local x, y = next_cell()
+    if not (x == px and y == py) and dgn.create_monster(x, y, spec) then
+      return x, y
+    end
+  end
+  error("dcc_smoke FAILED: could not place " .. spec)
+end
+-- Kill a fresh monster, by the player or by a fresh killer_spec monster.
+local function kill(spec, killer_spec)
+  local x, y = spawn(spec)
+  if killer_spec then
+    local kx, ky = spawn(killer_spec)
+    check(dcc.kill(x, y, kx, ky), spec .. " is killed by " .. killer_spec)
+  else
+    check(dcc.kill(x, y), spec .. " is killed by the player")
+  end
+end
+
+-- Unlocking is one-shot, announced, and awards the achievement's box.
+mark()
+check(dcc.unlock("first_blood"), "unlocking first_blood succeeds")
+check(since_mark():find("Achievement unlocked: First Blood", 1, true) ~= nil,
+      "the Announcer calls the unlock")
+check(since_mark():find("First blood. Try to look like you meant it.", 1, true)
+      ~= nil, "with the achievement's line")
+check(since_mark():find("Bronze box", 1, true) ~= nil,
+      "and names the Bronze box")
+mark()
+check(not dcc.unlock("first_blood"), "unlocking it again does nothing")
+check(quiet(), "a repeated unlock announces nothing")
+check(#dcc.achievements() == 1, "first_blood is recorded once")
+check(dcc.has_achievement("first_blood"), "has_achievement sees it")
+check(not dcc.has_achievement("orb"), "has_achievement is false for orb")
+check(dcc.box_count() == 1, "one box after one unlock")
+check(dcc.boxes()[1] == "Bronze", "the box is Bronze")
+check(not pcall(dcc.unlock, "no_such_achievement"),
+      "unlocking an unknown id raises an error")
+
+-- The state survives a save and reload, and stays one-shot afterwards.
+check(dcc.save_roundtrip() > 0, "the DCC state goes through save marshalling")
+check(dcc.has_achievement("first_blood"), "first_blood survives a reload")
+check(dcc.box_count() == 1 and dcc.boxes()[1] == "Bronze",
+      "the box survives a reload")
+check(not dcc.unlock("first_blood"),
+      "after a reload first_blood is still one-shot")
+check(#dcc.achievements() == 1 and dcc.box_count() == 1,
+      "and nothing was added")
+
+-- Which kills count: the player's and a player ally's, not other monsters',
+-- not summons, not your own allies. The kills give XP, and a level-up that
+-- earns a stat point would prompt (and hang a headless script), so the
+-- player fights at XL 26, far from XL 27. That also meets xl_10 and xl_20.
+check(you.set_xl(26), "the player is set to XL 26 for the fights")
+dcc.reset_achievements()
+kill("orc", "orc")
+check(not dcc.has_achievement("first_blood"),
+      "a kill by a hostile monster does not count")
+kill("orc sum:shadow_creatures dur:2")
+check(not dcc.has_achievement("first_blood"),
+      "killing a summoned monster does not count")
+kill("orc att:friendly")
+check(not dcc.has_achievement("first_blood"),
+      "killing your own ally does not count")
+check(dcc.box_count() == 0, "no box from kills that do not count")
+mark()
+kill("orc", "orc att:friendly")
+check(dcc.has_achievement("first_blood"), "a kill by an ally counts")
+check(since_mark():find("First Blood", 1, true) ~= nil,
+      "the Announcer calls first_blood on the kill")
+check(dcc.has_achievement("xl_10") and dcc.has_achievement("xl_20"),
+      "the check after a counted kill unlocks xl_10 and xl_20 at XL 26")
+check(dcc.box_count() == #dcc.achievements(),
+      "every achievement awarded exactly one box")
+
+dcc.reset_achievements()
+kill("orc", "orc att:friendly sum:shadow_creatures dur:2")
+check(dcc.has_achievement("first_blood"), "a kill by your summon counts")
+
+dcc.reset_achievements()
+kill("orc")
+check(dcc.has_achievement("first_blood"), "a kill by the player counts")
+
+-- Kills count in the Abyss and in portal vaults too (only the floor clock
+-- pauses there).
+for _, place in ipairs({ "Abyss:1", "Sewer" }) do
+  dcc.reset_achievements()
+  debug.goto_place(place)
+  kill("orc")
+  check(dcc.has_achievement("first_blood"), "a kill in " .. place .. " counts")
+end
+debug.goto_place("D:3")
+
+-- Uniques: killed by the player or an ally, counted at 1, 3 and 5.
+dcc.reset_achievements()
+kill("Grinder", "orc")
+check(not dcc.has_achievement("unique_1"),
+      "a unique killed by a hostile monster does not count")
+local uniques = { "Sigmund", "Ijyb", "Jessica", "Terence", "Edmund" }
+for i, name in ipairs(uniques) do
+  if i == 2 then
+    kill(name, "orc att:friendly")
+  else
+    kill(name)
+  end
+  check(dcc.has_achievement("unique_1") == (i >= 1)
+        and dcc.has_achievement("unique_3") == (i >= 3)
+        and dcc.has_achievement("unique_5") == (i >= 5),
+        "unique achievements after " .. i .. " unique kill(s)")
+end
+
+-- big_game: a monster with HD at least XL + 5.
+dcc.reset_achievements()
+kill("orc hd:1")
+check(not dcc.has_achievement("big_game"), "an HD 1 orc is not big game")
+kill("orc hd:" .. (you.xl() + 5))
+check(dcc.has_achievement("big_game"), "an orc with HD = XL + 5 is big game")
+
+-- kill_streak: ten counted kills within 50 turns.
+dcc.reset_achievements()
+for i = 1, 9 do
+  kill("orc")
+end
+check(not dcc.has_achievement("kill_streak"), "nine quick kills are no streak")
+dcc.advance_time(510)
+kill("orc")
+check(not dcc.has_achievement("kill_streak"),
+      "ten kills spread over 51 turns are no streak")
+for i = 1, 8 do
+  kill("orc")
+end
+check(not dcc.has_achievement("kill_streak"),
+      "the window slides: nine kills inside it are still no streak")
+mark()
+kill("orc")
+check(dcc.has_achievement("kill_streak"), "ten kills within 50 turns: streak")
+check(since_mark():find("Combo Meter", 1, true) ~= nil,
+      "the Announcer calls the streak")
+for i = 1, 10 do
+  kill("orc")
+end
+local streaks = 0
+for _, id in ipairs(dcc.achievements()) do
+  if id == "kill_streak" then
+    streaks = streaks + 1
+  end
+end
+check(streaks == 1, "another ten quick kills award no second streak")
+
+check(dcc.box_count() == #dcc.achievements(),
+      "after all the fights, still one box per achievement")
+
+-- Floor entry: floors reached (absolute depth) and leaving a floor early.
+check(you.set_xl(1), "the player is back to XL 1")
+dcc.reset_achievements()
+debug.goto_place("D:1")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("floor_2"), "D:1 is not floor 2")
+debug.goto_place("D:2")
+test.regenerate_level()
+dcc.enter_floor(true)
+check(dcc.has_achievement("floor_2"), "arriving on D:2 unlocks floor_2")
+check(dcc.has_achievement("quick_exit"),
+      "leaving D:1 with its whole clock left unlocks quick_exit")
+check(not dcc.has_achievement("floor_4"), "D:2 is not floor 4")
+check(#dcc.boxes() == 2, "two boxes: floor_2 and quick_exit")
+
+dcc.reset_achievements()
+dcc.set_floor_turns_left(600)  -- 40% of D:2's 1500
+debug.goto_place("D:3")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("quick_exit"),
+      "leaving with 40% of the clock left is no quick exit")
+check(dcc.has_achievement("floor_2"), "floor_2 is met again after a reset")
+debug.goto_place("D:6")
+dcc.enter_floor(true)
+check(dcc.has_achievement("floor_4") and dcc.has_achievement("floor_6"),
+      "skipping ahead to D:6 unlocks floor_4 and floor_6")
+check(not dcc.has_achievement("floor_8"), "D:6 is not floor 8")
+
+-- Off the connected branches depth says nothing: no floor achievements.
+dcc.reset_achievements()
+debug.goto_place("Abyss:1")
+dcc.enter_floor(true)
+check(#dcc.achievements() == 0, "arriving in the Abyss unlocks nothing")
+debug.goto_place("D:12")
+dcc.enter_floor(true)
+check(dcc.has_achievement("floor_12") and dcc.has_achievement("floor_10"),
+      "arriving on D:12 unlocks floor_10 and floor_12")
+
+-- One-shot across a reload: re-entering after a reload adds nothing.
+local before_ids = #dcc.achievements()
+local before_boxes = dcc.box_count()
+dcc.save_roundtrip()
+dcc.enter_floor(true)
+dcc.check_achievements()
+check(#dcc.achievements() == before_ids and dcc.box_count() == before_boxes,
+      "after a reload the same floor unlocks nothing new")

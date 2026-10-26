@@ -97,6 +97,9 @@
     <ClCompile Include="..\dcc.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc-achieve.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\dcc-clock.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1147,6 +1150,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc-achieve.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-clock.h">

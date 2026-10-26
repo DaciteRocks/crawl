@@ -11,6 +11,7 @@ module "dcc"
 #include "cluautil.h"
 #include "dcc.h"
 #include "branch.h"
+#include "dcc-achieve.h"
 #include "dcc-clock.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
@@ -30,6 +31,9 @@ module "dcc"
 #include "shopping.h"
 #include "spl-util.h"
 #include "state.h"
+#include "stringutil.h" // starts_with
+#include "tag-version.h" // TAG_MINOR_VERSION
+#include "tags.h" // writer, reader
 #include "terrain.h"
 #include "unwind.h"
 
@@ -492,6 +496,199 @@ LUAFN(dcc_only_rejected_outside_lua)
     return 2;
 }
 
+/*** The achievements unlocked so far, in unlock order.
+ * @treturn table array of achievement ids
+ * @function achievements
+ */
+LUAFN(dcc_achievements_lua)
+{
+    lua_newtable(ls);
+    if (!you.props.exists(DCC_ACHIEVEMENTS_KEY))
+        return 1;
+    int i = 1;
+    for (const CrawlStoreValue &v
+         : you.props[DCC_ACHIEVEMENTS_KEY].get_vector())
+    {
+        lua_pushstring(ls, v.get_string().c_str());
+        lua_rawseti(ls, -2, i++);
+    }
+    return 1;
+}
+
+/*** Has the player unlocked this achievement?
+ * @tparam string id
+ * @treturn boolean
+ * @function has_achievement
+ */
+LUAFN(dcc_has_achievement_lua)
+{
+    PLUARET(boolean, dcc_has_achievement(luaL_checkstring(ls, 1)));
+}
+
+/*** Unlock an achievement: the Announcer line, a note, its box. One-shot:
+ * an achievement already held does nothing. Raises an error for an id that
+ * is not in the table.
+ * @tparam string id
+ * @treturn boolean whether it was newly unlocked
+ * @function unlock
+ */
+LUAFN(dcc_unlock_lua)
+{
+    const string id = luaL_checkstring(ls, 1);
+    if (!dcc_find_achievement(id))
+        return luaL_error(ls, "dcc.unlock(): no achievement '%s'", id.c_str());
+    PLUARET(boolean, dcc_unlock(id));
+}
+
+/*** Evaluate the state achievements now (floor reached, XL, runes, ...), as
+ * the hook points do.
+ * @function check_achievements
+ */
+LUAFN(dcc_check_achievements_lua)
+{
+    UNUSED(ls);
+    dcc_check_achievements();
+    return 0;
+}
+
+/*** How many boxes the player holds, unopened.
+ * @treturn int
+ * @function box_count
+ */
+LUAFN(dcc_box_count_lua)
+{
+    PLUARET(number, dcc_box_count());
+}
+
+/*** The box tiers the player holds, unopened, as tier names.
+ * @treturn table array of tier names ("Bronze", ...)
+ * @function boxes
+ */
+LUAFN(dcc_boxes_lua)
+{
+    lua_newtable(ls);
+    if (!you.props.exists(DCC_BOXES_KEY))
+        return 1;
+    int i = 1;
+    for (const CrawlStoreValue &v : you.props[DCC_BOXES_KEY].get_vector())
+    {
+        lua_pushstring(ls,
+            dcc_box_tier_name(static_cast<dcc_box_tier>(v.get_int())));
+        lua_rawseti(ls, -2, i++);
+    }
+    return 1;
+}
+
+/*** The whole achievement table.
+ * @treturn table array of { id=, name=, line=, tier= } (tier is the box
+ * tier's name)
+ * @function achievement_table
+ */
+LUAFN(dcc_achievement_table_lua)
+{
+    lua_newtable(ls);
+    int i = 1;
+    for (const dcc_achievement &ach : dcc_achievement_table())
+    {
+        lua_newtable(ls);
+        lua_pushstring(ls, ach.id);
+        lua_setfield(ls, -2, "id");
+        lua_pushstring(ls, ach.name);
+        lua_setfield(ls, -2, "name");
+        lua_pushstring(ls, ach.line);
+        lua_setfield(ls, -2, "line");
+        lua_pushstring(ls, dcc_box_tier_name(ach.tier));
+        lua_setfield(ls, -2, "tier");
+        lua_rawseti(ls, -2, i++);
+    }
+    return 1;
+}
+
+/*** Forget every achievement, box and kill-tracking record, as at the start
+ * of a game. Script/test only.
+ * @function reset_achievements
+ */
+LUAFN(dcc_reset_achievements_lua)
+{
+    if (!_dcc_script_only(ls, "reset_achievements"))
+        return 0;
+    you.props.erase(DCC_ACHIEVEMENTS_KEY);
+    you.props.erase(DCC_BOXES_KEY);
+    you.props.erase(DCC_KILL_TIMES_KEY);
+    you.props.erase(DCC_UNIQUES_KILLED_KEY);
+    return 0;
+}
+
+/*** Kill the monster at (x, y) through the real damage path
+ * (monster::hurt() for all its hit points, then monster_die()), by the
+ * player or by the actor at (ax, ay). Script/test only.
+ * @tparam int x
+ * @tparam int y
+ * @tparam[opt] int ax the killer's position; default the player
+ * @tparam[opt] int ay
+ * @treturn boolean whether it died
+ * @function kill
+ */
+LUAFN(dcc_kill_lua)
+{
+    actor *victim = _dcc_actor_at(ls, 1);
+    actor *agent = lua_isnoneornil(ls, 3) ? &you : _dcc_actor_at(ls, 3);
+    if (!_dcc_script_only(ls, "kill"))
+        return 0;
+    if (!victim || !victim->is_monster())
+        return luaL_error(ls, "dcc.kill(): no monster there");
+    if (!agent)
+        return luaL_error(ls, "dcc.kill(): no killer there");
+    monster *mons = victim->as_monster();
+    mons->hurt(agent, mons->hit_points);
+    PLUARET(boolean, !mons->alive());
+}
+
+/*** Move the game's elapsed time on by some aut, as passing turns would
+ * (for the kill_streak window). The floor clock is not ticked.
+ * Script/test only.
+ * @tparam int aut
+ * @function advance_time
+ */
+LUAFN(dcc_advance_time_lua)
+{
+    const int aut = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "advance_time"))
+        return 0;
+    you.elapsed_time += max(0, aut);
+    return 0;
+}
+
+/*** Put all the DCC state in you.props (every dcc_ key) through the save
+ * file's marshalling and back, as saving and reloading the game would.
+ * Script/test only.
+ * @treturn int how many keys made the round trip
+ * @function save_roundtrip
+ */
+LUAFN(dcc_save_roundtrip_lua)
+{
+    if (!_dcc_script_only(ls, "save_roundtrip"))
+        return 0;
+    CrawlHashTable saved;
+    for (const auto &entry : you.props)
+        if (starts_with(entry.first, "dcc_"))
+            saved[entry.first] = entry.second;
+
+    vector<unsigned char> buf;
+    writer outf(&buf);
+    saved.write(outf);
+
+    CrawlHashTable loaded;
+    reader inf(buf, TAG_MINOR_VERSION);
+    loaded.read(inf);
+
+    for (const auto &entry : saved)
+        you.props.erase(entry.first);
+    for (const auto &entry : loaded)
+        you.props[entry.first] = entry.second;
+    PLUARET(number, loaded.size());
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -516,6 +713,17 @@ static const struct luaL_Reg dcc_dlib[] =
 { "way_on_from", dcc_way_on_from_lua },
 { "shop_at", dcc_shop_at_lua },
 { "dcc_only_rejected_outside", dcc_only_rejected_outside_lua },
+{ "achievements", dcc_achievements_lua },
+{ "has_achievement", dcc_has_achievement_lua },
+{ "unlock", dcc_unlock_lua },
+{ "check_achievements", dcc_check_achievements_lua },
+{ "box_count", dcc_box_count_lua },
+{ "boxes", dcc_boxes_lua },
+{ "achievement_table", dcc_achievement_table_lua },
+{ "reset_achievements", dcc_reset_achievements_lua },
+{ "kill", dcc_kill_lua },
+{ "advance_time", dcc_advance_time_lua },
+{ "save_roundtrip", dcc_save_roundtrip_lua },
 { nullptr, nullptr }
 };
 

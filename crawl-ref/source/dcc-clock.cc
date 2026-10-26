@@ -18,9 +18,9 @@
 
 #include "dcc-clock.h"
 
-#include "activity-interrupt-type.h"
 #include "branch.h"
-#include "delay.h" // interrupt_activity
+#include "dcc.h" // dcc_announce
+#include "dcc-achieve.h"
 #include "message.h"
 #include "notes.h"
 #include "player.h"
@@ -212,8 +212,7 @@ void dcc_start_floor_clock()
 }
 
 /**
- * The player has arrived on a level (files.cc load_level(), whenever the
- * arrival makes changes).
+ * The clock side of arriving on a level; see dcc_enter_floor().
  *
  * - Not a connected-branch floor (portal vault, Abyss, Pan, Zig): nothing
  *   changes; the clock of the floor the player came from is paused.
@@ -229,11 +228,8 @@ void dcc_start_floor_clock()
  * @param just_created  True on the first visit to this level (load_level's
  *                      just_created_level), as the Zot clock uses.
  */
-void dcc_enter_floor(bool just_created)
+static void _enter_floor_clock(bool just_created)
 {
-    if (!crawl_state.game_is_dcc())
-        return;
-
     const level_id here_id = level_id::current();
     if (!is_connected_branch(here_id))
         return;
@@ -245,6 +241,11 @@ void dcc_enter_floor(bool just_created)
             you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string();
         if (old_place == here && !just_created)
             return;
+
+        // Leaving a floor for a new one: quick_exit if most of its clock
+        // was left. The retry clock at a branch bottom does not count.
+        if (just_created && old_place != here && !_in_retry())
+            dcc_floor_left(_floor_aut_left(), _floor_aut_total());
 
         _park_clock(old_place, _floor_aut_left(), _floor_aut_total(),
                     _in_retry());
@@ -269,6 +270,22 @@ void dcc_enter_floor(bool just_created)
     }
 
     dcc_start_floor_clock();
+}
+
+/**
+ * The player has arrived on a level (files.cc load_level(), whenever the
+ * arrival makes changes): run the floor clock's arrival logic, then check
+ * the achievements (a floor reached, a floor left early).
+ *
+ * @param just_created  True on the first visit to this level.
+ */
+void dcc_enter_floor(bool just_created)
+{
+    if (!crawl_state.game_is_dcc())
+        return;
+
+    _enter_floor_clock(just_created);
+    dcc_check_achievements();
 }
 
 /**
@@ -348,15 +365,9 @@ dcc_collapse_result dcc_collapse_floor()
                    make_stringf("Floor %s collapsed; fell to %s, HP %d -> %d",
                                 before.describe().c_str(),
                                 below.describe().c_str(), old_hp, you.hp)));
+    // fell_through: the arrival check ran before the count went up.
+    dcc_check_achievements();
     return dcc_collapse_result::fell;
-}
-
-/// An Announcer line on the Crawl Live message channel. It interrupts
-/// travel, resting and other multi-turn activities.
-void dcc_announce(const string &msg)
-{
-    mprf(MSGCH_DCC, "%s", msg.c_str());
-    interrupt_activity(activity_interrupt::force);
 }
 
 /// Announce the warning threshold the clock just crossed, going from
@@ -409,9 +420,12 @@ dcc_collapse_result dcc_tick_clock_by(int aut)
     return dcc_collapse_floor();
 }
 
-/// Called once per player turn from player_reacts().
+/// Called once per player turn from player_reacts(). Also the per-turn
+/// achievement check, so state achievements (XL, runes, the Orb, a god)
+/// unlock on the turn they are met, on any level.
 void dcc_tick_clock()
 {
+    dcc_check_achievements();
     dcc_tick_clock_by(you.time_taken);
 }
 
