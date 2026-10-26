@@ -20,6 +20,7 @@ module "dcc"
 #include "dcc-quest.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
+#include "dcc-sponsor.h"
 #include "dcc-theme.h"
 #include "coord.h"
 #include "delay.h" // handle_delay, stop_delay
@@ -706,6 +707,7 @@ LUAFN(dcc_reset_achievements_lua)
     you.props.erase(DCC_FLOORS_KEY);
     you.props.erase(DCC_KILL_PLACE_KEY);
     you.props.erase(DCC_DETOUR_PLACE_KEY);
+    you.props.erase(DCC_SPONSOR_GOD_KEY);
     return 0;
 }
 
@@ -1720,6 +1722,57 @@ LUAFN(dcc_sponsor_altars_lua)
     return 1;
 }
 
+/*** Join a god, by name (a unique part of it will do), through the real
+ * join_religion(): the welcome, piety, gifts, and the DCC sponsor hook
+ * (dcc_god_joined()). Leaving a current god first is the normal
+ * excommunication. Script/test only.
+ * @tparam string god
+ * @function join_god
+ */
+LUAFN(dcc_join_god_lua)
+{
+    const string name = luaL_checkstring(ls, 1);
+    if (!_dcc_script_only(ls, "join_god"))
+        return 0;
+    const god_type god = str_to_god(name, false);
+    if (god == GOD_NO_GOD || god == GOD_ECUMENICAL)
+        return luaL_error(ls, "dcc.join_god(): no god '%s'", name.c_str());
+    if (you_worship(god))
+        return luaL_error(ls, "dcc.join_god(): already a follower of %s",
+                          god_name(god).c_str());
+    if (!player_can_join_god(god, false))
+        return luaL_error(ls, "dcc.join_god(): the player cannot join %s",
+                          god_name(god).c_str());
+    join_religion(god);
+    return 0;
+}
+
+/*** The god the player signed with at a sponsor booth (dcc_sponsor_god()).
+ * @treturn string|nil the god's name, or nil before a booth signing
+ * @function sponsor
+ */
+LUAFN(dcc_sponsor_lua)
+{
+    const god_type god = dcc_sponsor_god();
+    if (god == GOD_NO_GOD)
+    {
+        lua_pushnil(ls);
+        return 1;
+    }
+    lua_pushstring(ls, god_name(god).c_str());
+    return 1;
+}
+
+/*** Is the player standing on a sponsor booth altar
+ * (dcc_at_sponsor_booth())?
+ * @treturn boolean
+ * @function at_booth
+ */
+LUAFN(dcc_at_booth_lua)
+{
+    PLUARET(boolean, dcc_at_sponsor_booth());
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1810,6 +1863,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "monster_counts", dcc_monster_counts_lua },
 { "apply_theme_build", dcc_apply_theme_build_lua },
 { "sponsor_altars", dcc_sponsor_altars_lua },
+{ "join_god", dcc_join_god_lua },
+{ "sponsor", dcc_sponsor_lua },
+{ "at_booth", dcc_at_booth_lua },
 { nullptr, nullptr }
 };
 
