@@ -23,7 +23,7 @@
 #include "dcc-achieve.h"
 #include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
-#include "dcc-repick.h" // dcc_repick_arrived
+#include "dcc-repick.h" // dcc_repick_arrived, dcc_repick_turn
 #include "dcc-room.h" // dcc_settle_sponsor_booth
 #include "dcc-sponsor.h" // dcc_sponsor_intro
 #include "dcc-theme.h" // dcc_announce_theme, dcc_theme_for, ...
@@ -487,6 +487,7 @@ dcc_collapse_result dcc_tick_clock_by(int aut)
 dcc_collapse_result dcc_tick_clock()
 {
     dcc_check_achievements();
+    dcc_repick_turn();
     return dcc_tick_clock_by(you.time_taken);
 }
 

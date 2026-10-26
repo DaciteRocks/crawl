@@ -11,6 +11,9 @@
 
 #include "dcc.h"
 
+#include "dcc-quest.h" // dcc_quest_before_command
+#include "dcc-repick.h" // dcc_repick_before_command
+
 #include "activity-interrupt-type.h"
 #include "delay.h" // interrupt_activity
 #include "game-type.h"
@@ -51,4 +54,20 @@ void dcc_announce(const string &msg)
 {
     mprf(MSGCH_DCC, "%s", msg.c_str());
     interrupt_activity(activity_interrupt::force);
+}
+
+/**
+ * The main loop is about to read the player's next command (main.cc
+ * _input(), after the view update and any delay). Prompts that need the
+ * player are asked here, never from a view update or a delay: first the
+ * floor-3 re-roll (and the kit it owes), then the Floor Steward's quest
+ * offer. Each refuses while keys are queued, while running or delayed,
+ * and in headless scripts and tests.
+ */
+void dcc_before_command()
+{
+    if (!crawl_state.game_is_dcc())
+        return;
+    dcc_repick_before_command();
+    dcc_quest_before_command();
 }

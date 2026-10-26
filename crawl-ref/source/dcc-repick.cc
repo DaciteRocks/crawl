@@ -29,17 +29,24 @@
 #include "dcc-achieve.h" // dcc_check_achievements, dcc_unlock_batch
 #include "dcc-boxes.h" // dcc_free_item_slots
 #include "dcc-room.h" // dcc_settle_sponsor_booth
+#include "dcc-safe.h" // is_dcc_safe_cell
+#include "delay.h" // you_are_delayed
 #include "english.h" // article_a
 #include "env.h"
 #include "hiscores.h" // mark_milestone
 #include "dungeon.h" // dgn_place_multiple_items
+#include "item-name.h" // is_useless_item
+#include "item-prop.h" // item_type_is_equipment
 #include "items.h" // link_items, identify_item
+#include "libutil.h" // mouse_control, toalower
+#include "macro.h" // has_pending_input
 #include "level-id.h"
 #include "mapdef.h" // item_list
 #include "message.h"
 #include "monster.h"
 #include "mutation-type.h"
 #include "notes.h"
+#include "output.h" // redraw_screen
 #include "player.h"
 #include "random.h" // shuffle_array
 #include "religion.h" // god_name, is_good_god
@@ -47,10 +54,19 @@
 #include "state.h"
 #include "stringutil.h" // make_stringf
 #include "terrain.h" // feat_is_solid, feat_eliminates_items
+#include "ui.h" // ui::getch
+#ifdef USE_TILE_LOCAL
+# include "tilesdl.h" // tiles.layout_statcol
+#endif
 
 /// The first floor the offer rolls on: D:3, or the first Dungeon floor
 /// below it the player reaches (a shaft from D:2 skips D:3).
 const int REPICK_MIN_DEPTH = 3;
+
+// The player put the live offer off (Escape at the question): it is not
+// asked again until they have stepped off the safe room's cells and come
+// back. Not saved; a fresh roll clears it.
+static bool _put_off = false;
 
 /// Is the player on a Dungeon floor at or below the re-pick depth?
 static bool _on_repick_floor()
@@ -129,6 +145,7 @@ void dcc_repick_roll()
     for (species_type sp : pool)
         choices.push_back(static_cast<int>(sp));
     you.props[DCC_REPICK_OFFER_KEY].get_bool() = true;
+    _put_off = false;
 }
 
 /**
@@ -217,6 +234,9 @@ bool dcc_repick_apply(species_type sp)
     const string name = species::name(sp);
     you.props[DCC_REPICKED_KEY].get_string() = name;
     _clear_offer();
+    // The re-roll is one bundle: the new body is owed a kit.
+    if (!you.props.exists(DCC_KIT_KEY))
+        you.props[DCC_KIT_PENDING_KEY].get_bool() = true;
     dcc_announce(make_stringf("Re-rolled. Please welcome the new %s. Same "
                               "contestant, different paperwork.",
                               name.c_str()));
@@ -244,16 +264,19 @@ void dcc_repick_decline()
 /// the smoke checks that every line parses. "Good" items, not
 /// acquirement-grade: boxes are the loot mechanic. The armour and the
 /// weapon get a fixed plus rather than good_item, which makes them
-/// artefacts as often as not.
+/// artefacts as often as not; no_uniq keeps every piece of equipment from
+/// rolling as a randart (a randart ring is not the ring on the label).
 static const vector<dcc_kit> _kits =
 {
     { "steel", "Steel",
       "A sword, a shirt, and something to hide behind.",
-      { "long sword plus:2", "scale mail plus:2", "kite shield plus:1",
+      { "long sword plus:2 no_uniq", "scale mail plus:2 no_uniq",
+        "kite shield plus:1 no_uniq",
         "potion of might q:2" } },
     { "arcana", "Arcana",
       "Spells, a robe, and the ring the budget allowed.",
-      { "book of flames", "robe ego:resistance", "ring of magical power",
+      { "book of flames", "robe ego:resistance no_uniq",
+        "ring of magical power no_uniq",
         "potion of magic q:3" } },
     { "supplies", "Supplies",
       "For the contestant who plans to run.",
@@ -389,9 +412,223 @@ bool dcc_give_kit(const string &id, bool force)
             identify_item(env.item[i]);
 
     you.props[DCC_KIT_KEY].get_string() = kit->id;
+    you.props.erase(DCC_KIT_PENDING_KEY);
     dcc_announce(make_stringf("Kit delivered: %s. %s", kit->name,
                               kit->blurb));
     take_note(Note(NOTE_MESSAGE, 0, 0,
                    make_stringf("Received the %s kit", kit->name)));
     return true;
+}
+
+/// Is an accepted re-roll still owed its kit?
+bool dcc_kit_pending()
+{
+    return crawl_state.game_is_dcc()
+           && you.props.exists(DCC_KIT_PENDING_KEY)
+           && you.props[DCC_KIT_PENDING_KEY].get_bool()
+           && !you.props.exists(DCC_KIT_KEY);
+}
+
+/**
+ * Does this kit suit the player's body as it is now? Its equipment
+ * (weapons, staves, armour, jewellery) must all be usable
+ * (is_useless_item(): a Felid wields nothing, an Octopode wears no body
+ * armour, a small body cannot take a large shield). Potions, scrolls and
+ * books do not count: they are the part of a kit anyone can carry off.
+ */
+bool dcc_kit_suits(const dcc_kit &kit)
+{
+    item_list list;
+    for (const char *spec : kit.items)
+        list.add_item(spec);
+    for (size_t i = 0; i < list.size(); ++i)
+    {
+        const item_spec spec = list.get_item(i);
+        if (!item_type_is_equipment(spec.base_type)
+            || spec.sub_type == OBJ_RANDOM)
+        {
+            continue;
+        }
+        item_def item;
+        item.base_type = spec.base_type;
+        item.sub_type = spec.sub_type;
+        item.quantity = 1;
+        if (is_useless_item(item, false, true))
+            return false;
+    }
+    return true;
+}
+
+/// The kits on offer to the player now: those that suit them
+/// (dcc_kit_suits()), in table order; the Supplies kit if none does.
+vector<const dcc_kit *> dcc_kit_offer()
+{
+    vector<const dcc_kit *> offer;
+    for (const dcc_kit &kit : _kits)
+        if (dcc_kit_suits(kit))
+            offer.push_back(&kit);
+    if (offer.empty())
+        if (const dcc_kit *supplies = dcc_find_kit("supplies"))
+            offer.push_back(supplies);
+    return offer;
+}
+
+/// Once per player turn (dcc_tick_clock(), so it runs during travel and
+/// rests as well): off the safe room's cells, a put-off offer is asked
+/// again the next time the player stands on one.
+void dcc_repick_turn()
+{
+    if (_put_off && !is_dcc_safe_cell(you.pos()))
+        _put_off = false;
+}
+
+/// Show a prompt and read one key for it, as yesno() does (the keymap
+/// context of a confirmation; the messages cleared after). A hangup reads
+/// as Escape.
+static int _prompt_key(const string &prompt)
+{
+    mouse_control mc(MOUSE_MODE_YESNO);
+    mprf(MSGCH_PROMPT, "%s", prompt.c_str());
+    const int key = ui::getch(KMC_CONFIRM);
+    clear_messages();
+    return crawl_state.seen_hups ? ESCAPE : key;
+}
+
+/// The species or the kit changed what the screen shows (the title line,
+/// the stat column, the doll), as after wizard_change_species().
+static void _redraw_after_repick()
+{
+#ifdef USE_TILE_LOCAL
+    tiles.layout_statcol();
+#endif
+    redraw_screen();
+    update_screen();
+}
+
+/// A kit's number in the prompt: its place in the full table, so a key
+/// always means the same kit.
+static int _kit_number(const dcc_kit &kit)
+{
+    return static_cast<int>(&kit - _kits.data()) + 1;
+}
+
+/**
+ * Ask for the kit an accepted re-roll is owed, among dcc_kit_offer():
+ * "(1) Steel, (2) Arcana, (3) Supplies", leaving out kits that do not suit
+ * the player (their keys then do nothing). There is no declining: any
+ * other key, Escape included, picks nothing, and the question comes back
+ * before the next command until a kit is chosen.
+ */
+static void _ask_kit()
+{
+    const vector<const dcc_kit *> offer = dcc_kit_offer();
+    string prompt = "Kit:";
+    for (size_t i = 0; i < offer.size(); ++i)
+    {
+        prompt += make_stringf("%s (%d) %s", i ? "," : "",
+                               _kit_number(*offer[i]), offer[i]->name);
+    }
+    prompt += " (Esc: ask again later)";
+
+    const int key = _prompt_key(prompt);
+    if (crawl_state.seen_hups)
+        return;
+    for (const dcc_kit *kit : offer)
+    {
+        if (key == '0' + _kit_number(*kit))
+        {
+            // A jam (no room for the items) keeps the kit owed; the
+            // Announcer says why and it is asked again.
+            if (dcc_give_kit(kit->id))
+                _redraw_after_repick();
+            return;
+        }
+    }
+    canned_msg(MSG_OK);
+}
+
+/**
+ * Ask the re-roll: the Announcer's pitch, then one prompt naming the
+ * offered species. A letter takes that species (dcc_repick_apply(); if
+ * it refuses the pick for the player's god, the Announcer says why and the
+ * prompt comes back) and goes on to the kit; n declines everything
+ * (dcc_repick_decline(), no kit). Only those keys settle it: Escape,
+ * Enter, space, any other key or a hangup puts the offer off until the
+ * player has left the safe room's cells and come back.
+ */
+static void _ask_repick()
+{
+    dcc_announce("One-time offer from the studio: a re-roll. Three species "
+                 "on the table, and a kit to go with the new look. Decline "
+                 "and you keep everything you walked in with.");
+    while (dcc_repick_pending())
+    {
+        const vector<species_type> choices = dcc_repick_choices();
+        string prompt = "Re-roll as";
+        for (size_t i = 0; i < choices.size(); ++i)
+        {
+            prompt += make_stringf(" (%c) %s,", static_cast<char>('a' + i),
+                                   species::name(choices[i]).c_str());
+        }
+        prompt += " or (n) keep what you have? (Esc: later)";
+
+        const int key = _prompt_key(prompt);
+        if (crawl_state.seen_hups)
+        {
+            _put_off = true;
+            return;
+        }
+        const int lower = toalower(key);
+        if (lower == 'n')
+        {
+            dcc_repick_decline();
+            return;
+        }
+        const int index = lower - 'a';
+        if (index >= 0 && index < static_cast<int>(choices.size()))
+        {
+            if (!dcc_repick_apply(choices[index]))
+                continue;
+            _redraw_after_repick();
+            if (dcc_kit_pending())
+                _ask_kit();
+            return;
+        }
+        _put_off = true;
+        canned_msg(MSG_OK);
+        return;
+    }
+}
+
+/**
+ * The main loop is about to read the player's next command
+ * (dcc_before_command(), from main.cc _input()): ask for the kit an
+ * accepted re-roll is still owed (anywhere), else ask the re-roll if one
+ * is pending, the player stands on a safe-room cell and has not put it
+ * off. Never while keys are queued (a macro, sendkeys, a repeated or
+ * replayed command would answer it), while running or in a delay, or in
+ * headless scripts and tests, which drive dcc_repick_apply() and
+ * dcc_give_kit() themselves.
+ */
+void dcc_repick_before_command()
+{
+    if (!crawl_state.game_is_dcc() || crawl_state.script || crawl_state.test
+        || crawl_state.seen_hups)
+    {
+        return;
+    }
+    const bool kit = dcc_kit_pending();
+    if (!kit && !dcc_repick_pending())
+        return;
+    dcc_repick_turn();
+    if (has_pending_input() || crawl_state.is_repeating_cmd()
+        || crawl_state.is_replaying_keys()
+        || you.running || you_are_delayed())
+    {
+        return;
+    }
+    if (kit)
+        _ask_kit();
+    else if (!_put_off && is_dcc_safe_cell(you.pos()))
+        _ask_repick();
 }

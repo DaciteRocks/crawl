@@ -139,10 +139,14 @@ visibly DCC-only. Recorded exceptions:
   "dcc-boss.h"`).
 - Phase 5b (Floor Steward quest offer) adds a new kind of hook: a guarded
   call in the main input loop that may prompt the player.
-  `if (crawl_state.game_is_dcc()) dcc_quest_before_command();` sits in
+  `if (crawl_state.game_is_dcc()) dcc_before_command();` sits in
   `main.cc` `_input()` right after `ASSERT(!you.turn_is_over);`, past the
   delay handling, so it runs only when the player is about to give a
-  command (plus the `#include "dcc-quest.h"` it needs). The steward's
+  command (plus the `#include "dcc.h"` it needs). Phase 5b's line called
+  `dcc_quest_before_command()` directly; Phase 6i pointed the same line at
+  `dcc_before_command()` (`dcc.cc`), which asks the floor-3 re-roll and
+  its kit first (`dcc_repick_before_command()`, `dcc-repick.cc`) and then
+  the quest offer. The steward's
   `function_in_los` marker fires inside `viewwindow()` (show.cc fires
   `DET_PLAYER_IN_LOS` for every cell in view on every view update), where
   a `yesno` cannot go, so the marker only notes the offer and this hook
