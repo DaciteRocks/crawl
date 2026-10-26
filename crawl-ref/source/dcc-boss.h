@@ -15,6 +15,10 @@ class level_id;
 // level_id::describe() ("D:3").
 #define DCC_BOSS_KEY "dcc_boss"
 
+// How far out a boss stands: at least this percent of the farthest good
+// spot's walking distance from where the player arrived (dcc_quest_spot()).
+const int DCC_BOSS_FAR_PERCENT = 60;
+
 /// One floor boss: where it lives and what it is.
 struct dcc_boss
 {

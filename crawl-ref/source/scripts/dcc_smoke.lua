@@ -1913,6 +1913,8 @@ phase5b()
 
 -- Phase 6a: floor bosses.
 local function phase6a()
+  -- The least walking distance a boss may stand from the arrival.
+  local BOSS_MIN_WALK = 10
   local function target_count(base)
     for _, t in ipairs(dcc.quest_kill_targets()) do
       if t.name == base then
@@ -1934,14 +1936,29 @@ local function phase6a()
   local zot5 = false
   for _, b in ipairs(floors) do
     arrive(b.place)
+    local ax, ay = you.pos()
     check(dcc.boss_pos() == nil, b.place .. " has no boss before arrival")
     local before = target_count(b.base)
+    -- Whether the level has a far spot outside every vault; if not (an
+    -- encompass map, as some Zot:5 layouts are) the vaults_ok search must
+    -- place the boss.
+    local open_spot = dcc.quest_spot(ax, ay, dcc.boss_far_percent()) ~= nil
     dcc.enter_floor(true)
     local x, y, name = dcc.boss_pos()
     check(x ~= nil, b.place .. " holds its boss after the first arrival")
     check(name == b.name, b.place .. "'s boss is " .. b.name
           .. " (" .. tostring(name) .. ")")
     check(not dcc.is_safe_cell(x, y), b.name .. " stands outside the safe room")
+    -- Far from the arrival by the placement's own measure (vault cells
+    -- count as spots when it had to stand in one), and never close.
+    local in_vault = dgn.in_vault(x, y)
+    local d, far = dcc.walk_distance(ax, ay, x, y, in_vault)
+    local need = math.max(1, math.floor(far * dcc.boss_far_percent() / 100))
+    check(d >= need and d >= BOSS_MIN_WALK, b.name .. " stands far from the "
+          .. "arrival (" .. d .. " steps, farthest spot " .. far .. ")")
+    check(in_vault == not open_spot, b.name .. (open_spot
+          and " stands outside vaults, where the level has room"
+          or " stands on a vault cell: the vaults_ok search placed it"))
     local m = dgn.mons_at(x, y)
     check(m ~= nil and not m.wont_attack, b.name .. " is hostile")
     check(m.get_prop("dcc_boss") == b.place,
@@ -1953,13 +1970,28 @@ local function phase6a()
     check(dcc.boss_count() == 1, "a revisit of " .. b.place
           .. " places no second boss")
     dcc.enter_floor(true)
-    check(dcc.boss_count() == 1, "a rebuild of " .. b.place
-          .. " that keeps its boss places no second one")
+    check(dcc.boss_count() == 1, "another first-arrival call on " .. b.place
+          .. " while its boss lives places no second one")
     if b.place == "Zot:5" then
       zot5 = true
     end
   end
-  check(zot5, "Zot:5's boss (the encompass fallback) was checked")
+  check(zot5, "Zot:5's boss was checked")
+
+  -- The vaults_ok search on a level that is always an encompass map (a
+  -- Hell end; Zot:5 is one only for some layouts): the strict search finds
+  -- nothing, the relaxed one a far vault cell.
+  arrive("Dis:7")
+  local ax, ay = you.pos()
+  local pct = dcc.boss_far_percent()
+  check(dcc.quest_spot(ax, ay, pct) == nil,
+        "Dis:7 has no spot outside vaults")
+  local vx, vy = dcc.quest_spot(ax, ay, pct, true)
+  check(vx ~= nil and dgn.in_vault(vx, vy) and not dcc.is_safe_cell(vx, vy),
+        "the vaults_ok search finds a vault cell outside the safe room")
+  local d, far = dcc.walk_distance(ax, ay, vx, vy, true)
+  check(d >= math.max(1, math.floor(far * pct / 100)),
+        "and keeps the distance rule (" .. d .. " of " .. far .. " steps)")
 
   for _, place in ipairs({ "D:2", "D:4" }) do
     arrive(place)
@@ -1967,6 +1999,51 @@ local function phase6a()
     check(dcc.boss_pos() == nil and dcc.boss_count() == 0,
           place .. " holds no boss")
   end
+
+  -- A boss's death is no kill quest credit, even for a quest after its
+  -- base type; a plain monster of that type still counts.
+  arrive("D:3")
+  dcc.enter_floor(true)
+  dcc.activate_markers()
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      local m = dgn.mons_at(x, y)
+      if m and not m.has_prop("dcc_steward") and not m.has_prop("dcc_boss") then
+        dcc.remove_monster(x, y, "reset")
+      end
+    end
+  end
+  -- Kill targets live outside vaults and the safe room.
+  local ogres = {}
+  for y = 2, dgn.GYM - 3 do
+    for x = 2, dgn.GXM - 3 do
+      if #ogres < 2 and dgn.feature_name(dgn.grid(x, y)) == "floor"
+         and not dcc.is_safe_cell(x, y) and not dgn.in_vault(x, y)
+         and dgn.mons_at(x, y) == nil then
+        local m = dgn.create_monster(x, y, "ogre")
+        if m then
+          local ox, oy = mpos(m)
+          if not dgn.in_vault(ox, oy) and not dcc.is_safe_cell(ox, oy) then
+            table.insert(ogres, { x = ox, y = oy })
+          end
+        end
+      end
+    end
+  end
+  check(#ogres == 2, "two ogres are placed outside vaults on D:3")
+  dcc_quest_debug().setup("kill")
+  dcc_quest_debug().accept()
+  local q = dcc.quest_state()
+  check(q.kind == "kill" and q.target == "ogre" and q.need == 2,
+        "a kill quest for D:3's two ogres, not counting the boss ("
+        .. tostring(q.target) .. " x" .. tostring(q.need) .. ")")
+  local bx, by = dcc.boss_pos()
+  check(dcc.kill(bx, by), "the player kills the Opening Act")
+  check(dcc.boss_count() == 0, "D:3 has no boss now")
+  check(q.have == 0 and q.need == 2 and not q.done,
+        "the boss's death is no credit toward the ogre quest")
+  check(dcc.kill(ogres[1].x, ogres[1].y), "the player kills an ogre")
+  check(q.have == 1, "a plain ogre still counts")
 
   arrive("D:3")
   dcc.enter_floor(true)
