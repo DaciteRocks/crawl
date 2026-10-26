@@ -11,6 +11,16 @@ local function check(cond, what)
 end
 
 dcc.enable_for_script()
+
+-- Levels here are built as the game builds them: once generated, their
+-- markers are initialised (files.cc env.markers.init_all()), which is
+-- when a MonPropsMarker hands its props to its monster (Phase 5b's Floor
+-- Steward).
+local regenerate_level = test.regenerate_level
+function test.regenerate_level(...)
+  regenerate_level(...)
+  dcc.init_markers()
+end
 check(dcc.is_active(), "dcc.is_active() after enable_for_script")
 check(dgn.is_descent(), "dgn.is_descent() is true in DCC")
 check(dgn.br_depth("D") == 12, "the Dungeon is 12 floors deep")
@@ -1369,6 +1379,12 @@ check(ok and dcc.box_count() == 0, "the sealed box opens once there is room")
 -- Phase 5a: floor quests. In a function of its own: the main chunk is close
 -- to Lua's limit on local variables.
 local function phase5a()
+  -- Set up a quest of a kind on the current floor and accept it from the
+  -- Floor Steward (Phase 5b: a quest is tracked only once accepted).
+  local function setup(kind)
+    dcc_quest_debug().setup(kind)
+    dcc_quest_debug().accept()
+  end
   local function said(text)
     return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
   end
@@ -1392,7 +1408,8 @@ local function phase5a()
   local function clear_monsters()
     for y = 1, dgn.GYM - 2 do
       for x = 1, dgn.GXM - 2 do
-        if dgn.mons_at(x, y) then
+        local m = dgn.mons_at(x, y)
+        if m and not m.has_prop("dcc_steward") then
           dcc.remove_monster(x, y, "reset")
         end
       end
@@ -1415,8 +1432,8 @@ local function phase5a()
     dcc.unlock(ach.id)
   end
 
-  -- Arriving on a floor sets up its quest: one of the four kinds, active,
-  -- announced, and tracked by a marker.
+  -- Arriving on a floor sets up its quest: one of the four kinds, with a
+  -- marker to track it (the Floor Steward offers it: Phase 5b's checks).
   new_floor()
   mark()
   dcc.run_epilogues()
@@ -1427,12 +1444,11 @@ local function phase5a()
         .. tostring(q.kind) .. ")")
   check(q.done == false and q.expired == false, "the new quest is not done")
   check(q.tier == "Bronze", "a D:1 quest pays a Bronze box (" .. q.tier .. ")")
-  check(said("Floor quest:"), "the Announcer states the quest")
   check(dcc_quest_debug().marker() ~= nil, "a quest marker tracks it")
   check(dcc.quest_state("D:2") == nil, "a floor not yet reached has no quest")
   -- Each kind sets up on a normal floor (survive is also every fallback).
   for kind in pairs(kinds) do
-    dcc_quest_debug().setup(kind)
+    setup(kind)
     check(dcc.quest_state().kind == kind, "a " .. kind .. " quest sets up")
   end
 
@@ -1452,7 +1468,7 @@ local function phase5a()
     local gx, gy = mpos(m)
     table.insert(goblins, { x = gx, y = gy })
   end
-  dcc_quest_debug().setup("kill")
+  setup("kill")
   q = dcc.quest_state()
   check(q.kind == "kill" and q.target == "goblin" and q.need == 3,
         "a kill quest asks for three of the floor's goblins ("
@@ -1487,7 +1503,7 @@ local function phase5a()
   -- The phase gate: a kill quest force-completed by the debug helper.
   local g = dgn.create_monster(cells[n - 40].x, cells[n - 40].y, "goblin")
   check(g ~= nil, "another goblin is placed")
-  dcc_quest_debug().setup("kill")
+  setup("kill")
   q = dcc.quest_state()
   check(q.kind == "kill" and q.done == false, "a fresh kill quest")
   boxes = dcc.box_count()
@@ -1507,7 +1523,7 @@ local function phase5a()
     local gx, gy = mpos(m)
     table.insert(trio, { x = gx, y = gy })
   end
-  dcc_quest_debug().setup("kill")
+  setup("kill")
   q = dcc.quest_state()
   check(q.target == "goblin" and q.need == 3, "a kill quest for all three")
   mark()
@@ -1524,7 +1540,7 @@ local function phase5a()
 
   -- Reach: a far plain floor cell outside the safe room; stepping
   -- elsewhere does nothing, standing on it completes the quest.
-  dcc_quest_debug().setup("reach")
+  setup("reach")
   q = dcc.quest_state()
   check(q.kind == "reach" and q.x and q.y, "a reach quest has a target cell")
   check(dgn.feature_name(dgn.grid(q.x, q.y)) == "floor"
@@ -1549,7 +1565,7 @@ local function phase5a()
   -- Fetch: a flagged item on a far cell; picking it up there completes
   -- the quest, and the item is the player's to keep.
   you.moveto(cells[1].x, cells[1].y)
-  dcc_quest_debug().setup("fetch")
+  setup("fetch")
   q = dcc.quest_state()
   check(q.kind == "fetch" and #dgn.items_at(q.x, q.y) == 1,
         "a fetch quest places its item (" .. tostring(q.item) .. ")")
@@ -1572,7 +1588,7 @@ local function phase5a()
   -- Survive: turns off the safe room's cells with HP at half or more; a
   -- drop below half starts the count over, safe cells do not count, and
   -- one long event counts as at most 100 aut.
-  dcc_quest_debug().setup("survive")
+  setup("survive")
   q = dcc.quest_state()
   check(q.kind == "survive" and q.need == 150, "a D:1 survive quest is 150 turns")
   boxes = dcc.box_count()
@@ -1619,7 +1635,7 @@ local function phase5a()
   -- monster that carried it off) completes it on arrival.
   new_floor()
   dcc.run_epilogues()
-  dcc_quest_debug().setup("fetch")
+  setup("fetch")
   q = dcc.quest_state()
   boxes = dcc.box_count()
   debug.goto_place("D:2")
@@ -1631,7 +1647,7 @@ local function phase5a()
 
   new_floor()
   dcc.run_epilogues()
-  dcc_quest_debug().setup("fetch")
+  setup("fetch")
   q = dcc.quest_state()
   local ix, iy = q.x, q.y
   local it = dgn.items_at(ix, iy)[1]
@@ -1651,3 +1667,227 @@ local function phase5a()
         "holding the item on reaching D:2 completes D:1's fetch quest")
 end
 phase5a()
+
+-- Phase 5b: the Floor Steward, a good neutral human in every safe room who
+-- keeps its post and offers the floor's quest when first seen (a
+-- function_in_los marker; the main loop asks before the player's next
+-- command, which scripts stand in for with dcc.take_pending_offer() and
+-- the debug helper's forced answers).
+local function phase5b()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local function outside_cell()
+    for y = 1, dgn.GYM - 2 do
+      for x = 1, dgn.GXM - 2 do
+        if dgn.feature_name(dgn.grid(x, y)) == "floor"
+           and not dcc.is_safe_cell(x, y) and dgn.mons_at(x, y) == nil
+           and #dgn.items_at(x, y) == 0 then
+          return x, y
+        end
+      end
+    end
+  end
+  -- A plain safe floor cell next to the steward, not the kiosk, for the
+  -- player to stand on in sight of it.
+  local function cell_by_steward(sx, sy)
+    local kx, ky = dgn.find_marker_position_by_prop("dcc_kiosk", "1")
+    for dy = -1, 1 do
+      for dx = -1, 1 do
+        local x, y = sx + dx, sy + dy
+        if not (dx == 0 and dy == 0) and dcc.is_safe_cell(x, y)
+           and dgn.feature_name(dgn.grid(x, y)) == "floor"
+           and dgn.mons_at(x, y) == nil
+           and not (x == kx and y == ky) then
+          return x, y
+        end
+      end
+    end
+  end
+  local function new_floor()
+    debug.goto_place("D:1")
+    test.regenerate_level()
+    dcc.start_floor_clock()
+    dcc.activate_markers()
+    you.moveto(outside_cell())
+  end
+  local function said_nothing_new()
+    return since_mark():gsub("%s+", "") == ""
+  end
+
+  for _, ach in ipairs(dcc.achievement_table()) do
+    dcc.unlock(ach.id)
+  end
+
+  -- Every safe-room variant holds the steward, on a safe cell of its own,
+  -- good neutral, marked, and named.
+  local variants = { a = false, b = false, c = false, d = false }
+  local seen = 0
+  for i = 1, 60 do
+    if seen == 4 then
+      break
+    end
+    debug.goto_place(i % 2 == 0 and "D:3" or "D:7")
+    test.regenerate_level()
+    local v = (debug.vault_names() or ""):match("dcc_safe_room_(%a)")
+    check(v ~= nil, "a safe room is placed (" .. i .. ")")
+    local sx, sy = dcc.steward_pos()
+    check(sx ~= nil, "safe room " .. v .. " holds the Floor Steward")
+    check(dcc.is_safe_cell(sx, sy), "the steward stands on a safe cell")
+    local m = dgn.mons_at(sx, sy)
+    check(m.has_prop("dcc_steward"), "the steward is marked dcc_steward")
+    check(m.wont_attack, "the steward will not attack")
+    check(m.name == "Floor Steward", "the steward is named (" .. m.name .. ")")
+    local px, py = dgn.find_marker_position_by_prop("dcc_steward_post", "1")
+    check(px == sx and py == sy, "the steward's post has its offer trigger")
+    if not variants[v] then
+      variants[v] = true
+      seen = seen + 1
+    end
+  end
+  check(seen == 4, "all four safe-room variants were checked")
+
+  -- The steward keeps its post: it can step nowhere, even inside the
+  -- room, and its AI leaves it where it is.
+  new_floor()
+  local sx, sy = dcc.steward_pos()
+  local stepped = false
+  for dy = -1, 1 do
+    for dx = -1, 1 do
+      if not (dx == 0 and dy == 0)
+         and dcc.monster_can_step(sx, sy, sx + dx, sy + dy) then
+        stepped = true
+      end
+    end
+  end
+  check(not stepped, "the steward cannot step off its post")
+  local m = dgn.mons_at(sx, sy)
+  for i = 1, 10 do
+    act(m)
+  end
+  local nx, ny = dcc.steward_pos()
+  check(nx == sx and ny == sy, "ten AI turns leave the steward at its post")
+
+  -- Arriving: the quest is set up but not offered, so not tracked and not
+  -- announced.
+  mark()
+  dcc.run_epilogues()
+  local q = dcc.quest_state()
+  check(type(q) == "table" and q.offered == false and q.accepted == false,
+        "after the epilogue, D:1's quest is not yet offered")
+  check(not dcc_quest_debug().active(), "an unoffered quest is not active")
+  check(not said("Floor quest:"), "and the Announcer has not stated it")
+  dcc_quest_debug().setup("reach")
+  q = dcc.quest_state()
+  check(q.offered == false, "a new reach quest is not yet offered")
+  local boxes = dcc.box_count()
+  you.moveto(q.x, q.y)
+  check(not q.done and dcc.box_count() == boxes,
+        "reaching the cell of an unoffered quest does nothing")
+
+  -- The offer trigger: seeing the steward's post notes the offer, which
+  -- the main loop takes once, and not while the player is running.
+  local px, py = cell_by_steward(sx, sy)
+  check(px ~= nil, "there is room to stand by the steward")
+  you.moveto(px, py)
+  check(dcc.take_pending_offer() == nil,
+        "no offer is waiting before the steward is seen")
+  dcc.fire_los(px, py)
+  check(dcc.take_pending_offer() == nil,
+        "seeing another cell does not note the offer")
+  dcc.fire_los(sx, sy)
+  check(dcc.take_pending_offer() == "D:1", "seeing the steward notes D:1's offer")
+  check(dcc.take_pending_offer() == nil, "the note is taken once")
+  dcc.set_running(true)
+  dcc.fire_los(sx, sy)
+  check(dcc.take_pending_offer() == nil, "no offer while running or travelling")
+  dcc.set_running(false)
+
+  -- Accepting: the Announcer introduces the steward and states the quest,
+  -- the quest goes live, and the offer is not made twice.
+  mark()
+  check(dcc_quest_debug().accept() == true, "accept() takes the quest")
+  check(said("Floor Steward") and said("Floor quest:")
+        and said("Quest accepted"),
+        "the Announcer introduces the steward, states the quest and confirms")
+  check(q.offered and q.accepted and dcc_quest_debug().active(),
+        "the accepted quest is active")
+  mark()
+  check(dcc_quest_debug().accept() == false and said_nothing_new(),
+        "the offer is made only once")
+  you.moveto(q.x, q.y)
+  check(q.done and dcc.box_count() == boxes + 1,
+        "reaching the cell completes the accepted quest")
+
+  -- Declining leaves no quest.
+  you.moveto(px, py)
+  dcc_quest_debug().setup("reach")
+  q = dcc.quest_state()
+  mark()
+  check(dcc_quest_debug().decline() == false, "decline() turns the quest down")
+  check(said("Quest declined"), "the Announcer notes it")
+  check(q.offered and q.declined and not q.accepted
+        and not dcc_quest_debug().active(), "the declined quest is not active")
+  check(dcc_quest_debug().accept() == false,
+        "a declined quest is not offered again")
+  boxes = dcc.box_count()
+  you.moveto(q.x, q.y)
+  check(not q.done and dcc.box_count() == boxes,
+        "reaching the cell of a declined quest does nothing")
+
+  -- Once the quest has been offered, seeing the steward notes nothing.
+  you.moveto(px, py)
+  dcc.fire_los(sx, sy)
+  check(dcc.take_pending_offer() == nil, "an offered quest is not noted again")
+
+  -- The offer trigger survives the level's save and reload.
+  dcc_quest_debug().setup("reach")
+  check(dcc.markers_roundtrip() > 0, "the level's markers make a round trip")
+  dcc.fire_los(sx, sy)
+  check(dcc.take_pending_offer() == "D:1",
+        "the read-back trigger still notes the offer")
+
+  -- The steward cannot be harmed in the safe room; killed anyway, it is
+  -- no kill and it voids the quest.
+  check(not dcc.can_harm(px, py, sx, sy), "the safe room protects the steward")
+  dcc_quest_debug().setup("reach")
+  q = dcc.quest_state()
+  dcc_quest_debug().accept()
+  dcc.reset_achievements()
+  local done = dcc.quests_done()
+  boxes = dcc.box_count()
+  mark()
+  check(dcc.kill(sx, sy), "the steward dies (script kill)")
+  check(dcc.steward_pos() == nil, "the floor has no steward now")
+  check(q.voided and not dcc_quest_debug().active(),
+        "killing it voids the accepted quest")
+  check(said("You killed the Floor Steward"), "the Announcer taunts")
+  check(not dcc.has_achievement("first_blood"), "the steward is no kill")
+  you.moveto(q.x, q.y)
+  check(not q.done and dcc.box_count() == boxes and dcc.quests_done() == done,
+        "a voided quest pays nothing")
+  for _, ach in ipairs(dcc.achievement_table()) do
+    dcc.unlock(ach.id)
+  end
+
+  -- A floor without a steward gets its quest active at once, stated.
+  mark()
+  dcc_quest_debug().setup("survive")
+  q = dcc.quest_state()
+  check(q.offered and q.accepted and dcc_quest_debug().active()
+        and said("Floor quest:"),
+        "with no steward the quest is active and stated at once")
+
+  -- Losing the steward before the offer voids the unoffered quest.
+  new_floor()
+  dcc.run_epilogues()
+  q = dcc.quest_state()
+  boxes = dcc.box_count()
+  sx, sy = dcc.steward_pos()
+  dcc.remove_monster(sx, sy, "reset")
+  check(q.voided and not q.offered,
+        "losing the steward before the offer voids the quest")
+  check(dcc_quest_debug().accept() == false, "a voided quest is not offered")
+  check(dcc.box_count() == boxes, "and no box is awarded")
+end
+phase5b()

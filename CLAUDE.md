@@ -128,6 +128,17 @@ visibly DCC-only. Recorded exceptions:
   switch in `items.cc` (plus the `#include "dcc-boxes.h"` it needs), so a
   box item's description says it was won from a loot box. `AQ_DCC_BOX`
   items exist only in DCC games, so the case needs no guard.
+- Phase 5b (Floor Steward quest offer) adds a new kind of hook: a guarded
+  call in the main input loop that may prompt the player.
+  `if (crawl_state.game_is_dcc()) dcc_quest_before_command();` sits in
+  `main.cc` `_input()` right after `ASSERT(!you.turn_is_over);`, past the
+  delay handling, so it runs only when the player is about to give a
+  command (plus the `#include "dcc-quest.h"` it needs). The steward's
+  `function_in_los` marker fires inside `viewwindow()` (show.cc fires
+  `DET_PLAYER_IN_LOS` for every cell in view on every view update), where
+  a `yesno` cannot go, so the marker only notes the offer and this hook
+  asks. Everything else (the steward keeping its post, no kill credit,
+  the void on its death) lives in DCC files.
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

@@ -63,6 +63,7 @@
 #include "beh-type.h"
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-quest.h" // dcc_is_steward
 #include "env.h"
 #include "fprop.h"
 #include "item-def.h"
@@ -164,10 +165,13 @@ static map<coord_def, int> _steps_out(const coord_def &start)
  * May this monster not end up on pos? True for a monster that would attack
  * the player, when pos is a safe cell, unless the monster already stands on
  * a safe cell and pos is a cell of the same room strictly closer to the way
- * out (or its own cell).
+ * out (or its own cell). The Floor Steward (dcc-quest.cc) keeps its post:
+ * it may not end up anywhere but its own cell.
  */
 bool dcc_monster_barred_from(const monster &mon, const coord_def &pos)
 {
+    if (crawl_state.game_is_dcc() && dcc_is_steward(mon))
+        return pos != mon.pos();
     if (!is_dcc_safe_cell(pos) || mon.wont_attack())
         return false;
     if (!_on_safe_cell(mon))
