@@ -429,3 +429,21 @@ one-shot; the "spreads" claim in the phase text is corrected. Also:
 Steel's weapon and armour use a fixed plus instead of `good_item`, which
 rolled artefacts. Deviations are in the phase file; 6i's file now notes
 that kits should suit the picked species.
+
+## 2026-10-26 — Phase 6i done
+
+Landed: the live re-pick offer. The `main.cc` `_input()` hook line now
+calls `dcc_before_command()` (`dcc.cc`): the re-roll prompt
+(`dcc_repick_before_command()`, `dcc-repick.cc`) first, then the quest
+offer. In the safe room the Announcer pitches the re-roll; a letter
+changes species and asks for a kit (only kits whose equipment suits the
+new body, else Supplies), `n` declines with no kit. The owed kit is a
+saved flag (`dcc_kit_pending`). Never asked headless, with keys queued,
+while repeating, replaying, running or delayed. Review changes: the
+owed kit is asked only on a safe cell, and Escape or a jam puts it off
+like the re-roll (design change: the every-command kit prompt nagged
+mid-fight); unrecognised keys and `CK_REDRAW` ask again instead of
+putting the offer off; the put-off flag is cleared on every load but a
+visit (from `dcc_start_stair()`), so it never carries into another game.
+Kit equipment gained `no_uniq` (a randart ring flaked 6h's smoke).
+Deviations and the manual checks are in the phase file.

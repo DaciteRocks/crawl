@@ -2033,6 +2033,23 @@ LUAFN(dcc_before_command_lua)
     return 0;
 }
 
+/*** Has the player put the re-roll or kit question off
+ * (dcc_repick_put_off())? With true, put it off first, as Escape at the
+ * question would. Script/test only.
+ * @tparam[opt=false] boolean set put the question off
+ * @treturn boolean
+ * @function repick_put_off
+ */
+LUAFN(dcc_repick_put_off_lua)
+{
+    const bool set = lua_toboolean(ls, 1);
+    if (!_dcc_script_only(ls, "repick_put_off"))
+        return 0;
+    if (set)
+        dcc_repick_set_put_off();
+    PLUARET(boolean, dcc_repick_put_off());
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -2142,6 +2159,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "kit_pending", dcc_kit_pending_lua },
 { "kit_offer", dcc_kit_offer_lua },
 { "before_command", dcc_before_command_lua },
+{ "repick_put_off", dcc_repick_put_off_lua },
 { nullptr, nullptr }
 };
 

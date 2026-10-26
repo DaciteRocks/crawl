@@ -165,7 +165,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6f | Sponsor signing: join hook and Gold box | done 2026-10-25 |
 | 6g | Species re-pick core | done 2026-10-25 |
 | 6h | Kits | done 2026-10-25 |
-| 6i | Live re-pick offer | not started |
+| 6i | Live re-pick offer | done 2026-10-26 |
 
 Phases 1, 2, 3, 4 were each split from one agreed feature into two commits
 because the first half changes trunk plumbing and the second adds the new
@@ -845,7 +845,7 @@ Status: done 2026-10-25
 `docs/dcc/phases/6i-repick-offer.md`. The `main.cc` hook becomes
 `dcc_before_command()` (re-pick offer, then quest offer); the pitch and
 the species/kit prompts run from there with Escape = later. ~8 files.
-Status: not started
+Status: done 2026-10-26
 
 ---
 

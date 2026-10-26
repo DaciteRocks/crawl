@@ -117,4 +117,68 @@ gets (probably the Supplies kit, which suits everyone).
   `change_species_to`; `tiles.layout_statcol()` as `wizard_change_species`'s
   caller does may be needed for the stat column. Verify by eye.
 
-Status: not started
+## Design change at review (orchestrator, 2026-10-26)
+
+The text above has the owed kit asked before every command, anywhere,
+with Escape deferring it one keystroke. Both reviewers rated that the
+worst UX problem: mid-fight the prompt came back on every command,
+`clear_messages()` wiped the combat text each time, and a jammed delivery
+re-announced (with a forced interrupt) on every command. The rule now:
+the kit, like the re-roll, is asked only while the player stands on a
+safe cell. Escape (or a jam) puts it off with the re-roll's mechanism,
+and it is asked again once the player has stepped off the safe cells and
+come back onto one, which includes arriving in the next floor's safe
+room. The prompt reads "(Esc: ask next time you're in a safe room)". The
+kit stays owed across a save and reload (`dcc_kit_pending`).
+
+## As built (deviations from the text above)
+
+- Keys are read with `ui::getch(KMC_CONFIRM)`, as `yesno()` (and so the
+  quest offer) does, not `getchm()`: the same keymap context and redraw
+  handling as the prompt the quest offer already uses at this point.
+- Only Escape (or Ctrl-G), Enter, space or a hangup puts a question off
+  (review fix). Any other unrecognised key asks again; `CK_REDRAW` (a
+  resized terminal) redraws the screen and asks again. The same rule
+  holds for the kit prompt.
+- Kits that suit the new body (the 6h note): `dcc_kit_suits()` requires
+  every weapon, staff, armour and jewellery item of a kit to be usable
+  (`is_useless_item()` on the spec's base and sub type); potions,
+  scrolls and books do not count. A Felid or an Octopode is offered
+  Supplies only (Steel's scale mail and Arcana's robe are body armour); a
+  Mummy may still take Steel. If no kit suits, Supplies is offered. Keys
+  keep the table numbers, so `2` is always Arcana.
+- The put-off flag is a static, cleared per turn when the player is off
+  the safe cells (`dcc_repick_turn()`, from `dcc_tick_clock()`, so travel
+  and rests count), by a fresh roll, and (review fix) on every load but a
+  visit (`dcc_repick_level_loaded()` from `dcc_start_stair()`, which
+  `load_level()` already calls): a new or restored game, or a level
+  change, never inherits another game's Escape. No new trunk hook.
+- `DCC_KIT_PENDING_KEY` (`dcc_kit_pending`) is set by
+  `dcc_repick_apply()` (not by the prompt), so the script re-pick owes a
+  kit too; `dcc_give_kit()` erases it; `dcc.reset_repick()` erases it.
+- A god refusal in `dcc_repick_apply()` (6g) brings the species prompt
+  back; the Announcer has said why.
+- Kit equipment specs gained `no_uniq` (Phase 6h's smoke failed 1 run in
+  5 when the ring rolled as a randart).
+- Script hooks beyond the text: `dcc.kit_offer()` (ids on offer now),
+  `dcc.repick_put_off([set])` (script-only), plus `dcc.kit_pending()` and
+  `dcc.before_command()` from the text.
+
+## Manual checks (no headless way to answer a prompt)
+
+- D:3 by stairs: the first command brings the pitch and the prompt
+  naming three species. A typo asks again; Esc changes nothing; step out
+  of the room and back in: it asks again.
+- Resize the window at the prompt: it redraws and asks again.
+- Press a letter: the title line and the tiles stat column and doll show
+  the new species, the kit prompt follows (a Felid or an Octopode sees
+  Supplies only), the kit lands at your feet, then the steward's quest
+  offer.
+- Esc at the kit prompt: nothing until you leave the room's cells and
+  come back (or reach the next floor's room). Save and reload before
+  choosing: the kit is still asked in the room.
+- A second game, `n`: nothing changes, no kit, never asked again.
+- With a macro, a repeated command or travel running, no prompt appears
+  until the player has control.
+
+Status: done 2026-10-26

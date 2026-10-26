@@ -24,6 +24,7 @@
 
 #include "act-iter.h" // monster_iterator
 #include "branch-type.h"
+#include "cio.h" // CK_ENTER, CK_REDRAW
 #include "coordit.h" // distance_iterator
 #include "dcc.h" // dcc_announce
 #include "dcc-achieve.h" // dcc_check_achievements, dcc_unlock_batch
@@ -63,9 +64,11 @@
 /// below it the player reaches (a shaft from D:2 skips D:3).
 const int REPICK_MIN_DEPTH = 3;
 
-// The player put the live offer off (Escape at the question): it is not
-// asked again until they have stepped off the safe room's cells and come
-// back. Not saved; a fresh roll clears it.
+// The player put the live question off (the re-roll or the kit owed after
+// it; Escape at the question, or a jammed kit): it is not asked again
+// until they have stepped off the safe room's cells and come back onto
+// one. Not saved; a fresh roll, a new or restored game and every level
+// change clear it (dcc_repick_level_loaded()).
 static bool _put_off = false;
 
 /// Is the player on a Dungeon floor at or below the re-pick depth?
@@ -474,24 +477,61 @@ vector<const dcc_kit *> dcc_kit_offer()
 }
 
 /// Once per player turn (dcc_tick_clock(), so it runs during travel and
-/// rests as well): off the safe room's cells, a put-off offer is asked
-/// again the next time the player stands on one.
+/// rests as well): off the safe room's cells, a put-off question (the
+/// re-roll or the kit) is asked again the next time the player stands on
+/// one, which includes arriving in the next floor's safe room.
 void dcc_repick_turn()
 {
     if (_put_off && !is_dcc_safe_cell(you.pos()))
         _put_off = false;
 }
 
+/// A game was started or restored, or the player changed level
+/// (dcc_start_stair(), from load_level()): forget any put-off question.
+/// The static flag outlives a game in the process; this keeps one game's
+/// Escape from carrying into the next save loaded.
+void dcc_repick_level_loaded()
+{
+    _put_off = false;
+}
+
+/// Does this key put the question off? Escape (or Ctrl-G), Enter or
+/// space; a hangup reads as Escape.
+static bool _is_later_key(int key)
+{
+    return key_is_escape(key) || key == CK_ENTER || key == '\n'
+           || key == ' ';
+}
+
 /// Show a prompt and read one key for it, as yesno() does (the keymap
-/// context of a confirmation; the messages cleared after). A hangup reads
-/// as Escape.
+/// context of a confirmation; the messages cleared after). A redraw
+/// request (a resized terminal) redraws the screen and asks again. A
+/// hangup reads as Escape.
 static int _prompt_key(const string &prompt)
 {
     mouse_control mc(MOUSE_MODE_YESNO);
-    mprf(MSGCH_PROMPT, "%s", prompt.c_str());
-    const int key = ui::getch(KMC_CONFIRM);
-    clear_messages();
-    return crawl_state.seen_hups ? ESCAPE : key;
+    while (true)
+    {
+        if (crawl_state.seen_hups)
+            return ESCAPE;
+        mprf(MSGCH_PROMPT, "%s", prompt.c_str());
+        const int key = ui::getch(KMC_CONFIRM);
+        clear_messages();
+        if (crawl_state.seen_hups)
+            return ESCAPE;
+        if (key != CK_REDRAW)
+            return key;
+        redraw_screen();
+        update_screen();
+    }
+}
+
+/// The question is put off until the player is next back on a safe cell.
+static void _put_question_off()
+{
+    _put_off = true;
+    if (!crawl_state.seen_hups)
+        canned_msg(MSG_OK);
 }
 
 /// The species or the kit changed what the screen shows (the title line,
@@ -515,9 +555,10 @@ static int _kit_number(const dcc_kit &kit)
 /**
  * Ask for the kit an accepted re-roll is owed, among dcc_kit_offer():
  * "(1) Steel, (2) Arcana, (3) Supplies", leaving out kits that do not suit
- * the player (their keys then do nothing). There is no declining: any
- * other key, Escape included, picks nothing, and the question comes back
- * before the next command until a kit is chosen.
+ * the player. There is no declining. A kit's number settles it; Escape,
+ * Enter, space or a hangup puts it off, as does a jammed delivery (the
+ * Announcer says why), until the player is next back on a safe cell; any
+ * other key asks again.
  */
 static void _ask_kit()
 {
@@ -528,23 +569,28 @@ static void _ask_kit()
         prompt += make_stringf("%s (%d) %s", i ? "," : "",
                                _kit_number(*offer[i]), offer[i]->name);
     }
-    prompt += " (Esc: ask again later)";
+    prompt += " (Esc: ask next time you're in a safe room)";
 
-    const int key = _prompt_key(prompt);
-    if (crawl_state.seen_hups)
-        return;
-    for (const dcc_kit *kit : offer)
+    while (true)
     {
-        if (key == '0' + _kit_number(*kit))
+        const int key = _prompt_key(prompt);
+        if (_is_later_key(key))
         {
-            // A jam (no room for the items) keeps the kit owed; the
-            // Announcer says why and it is asked again.
-            if (dcc_give_kit(kit->id))
-                _redraw_after_repick();
+            _put_question_off();
             return;
         }
+        for (const dcc_kit *kit : offer)
+        {
+            if (key == '0' + _kit_number(*kit))
+            {
+                if (dcc_give_kit(kit->id))
+                    _redraw_after_repick();
+                else
+                    _put_off = true; // jammed: the kit stays owed
+                return;
+            }
+        }
     }
-    canned_msg(MSG_OK);
 }
 
 /**
@@ -552,9 +598,9 @@ static void _ask_kit()
  * offered species. A letter takes that species (dcc_repick_apply(); if
  * it refuses the pick for the player's god, the Announcer says why and the
  * prompt comes back) and goes on to the kit; n declines everything
- * (dcc_repick_decline(), no kit). Only those keys settle it: Escape,
- * Enter, space, any other key or a hangup puts the offer off until the
- * player has left the safe room's cells and come back.
+ * (dcc_repick_decline(), no kit). Escape, Enter, space or a hangup puts
+ * the offer off until the player has left the safe room's cells and come
+ * back; any other key asks again.
  */
 static void _ask_repick()
 {
@@ -573,9 +619,9 @@ static void _ask_repick()
         prompt += " or (n) keep what you have? (Esc: later)";
 
         const int key = _prompt_key(prompt);
-        if (crawl_state.seen_hups)
+        if (_is_later_key(key))
         {
-            _put_off = true;
+            _put_question_off();
             return;
         }
         const int lower = toalower(key);
@@ -594,21 +640,18 @@ static void _ask_repick()
                 _ask_kit();
             return;
         }
-        _put_off = true;
-        canned_msg(MSG_OK);
-        return;
     }
 }
 
 /**
  * The main loop is about to read the player's next command
- * (dcc_before_command(), from main.cc _input()): ask for the kit an
- * accepted re-roll is still owed (anywhere), else ask the re-roll if one
- * is pending, the player stands on a safe-room cell and has not put it
- * off. Never while keys are queued (a macro, sendkeys, a repeated or
- * replayed command would answer it), while running or in a delay, or in
- * headless scripts and tests, which drive dcc_repick_apply() and
- * dcc_give_kit() themselves.
+ * (dcc_before_command(), from main.cc _input()): while the player stands
+ * on a safe-room cell and has not put the question off, ask for the kit
+ * an accepted re-roll is still owed, else the re-roll if one is pending.
+ * Never while keys are queued (a macro, sendkeys, a repeated or replayed
+ * command would answer it), while running or in a delay, or in headless
+ * scripts and tests, which drive dcc_repick_apply() and dcc_give_kit()
+ * themselves.
  */
 void dcc_repick_before_command()
 {
@@ -627,8 +670,22 @@ void dcc_repick_before_command()
     {
         return;
     }
+    if (_put_off || !is_dcc_safe_cell(you.pos()))
+        return;
     if (kit)
         _ask_kit();
-    else if (!_put_off && is_dcc_safe_cell(you.pos()))
+    else
         _ask_repick();
+}
+
+/// Has the player put the re-roll or kit question off? Script helper.
+bool dcc_repick_put_off()
+{
+    return _put_off;
+}
+
+/// Put the question off, as Escape would. Script helper.
+void dcc_repick_set_put_off()
+{
+    _put_off = true;
 }

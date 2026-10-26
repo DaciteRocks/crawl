@@ -58,3 +58,6 @@ vector<const dcc_kit *> dcc_kit_offer();
 // The live offer (Phase 6i), asked from the main loop.
 void dcc_repick_turn();
 void dcc_repick_before_command();
+void dcc_repick_level_loaded();
+bool dcc_repick_put_off();
+void dcc_repick_set_put_off();
