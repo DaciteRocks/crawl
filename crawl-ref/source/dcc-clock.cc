@@ -21,6 +21,7 @@
 #include "branch.h"
 #include "dcc.h" // dcc_announce
 #include "dcc-achieve.h"
+#include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
 #include "message.h"
 #include "notes.h"
@@ -296,7 +297,8 @@ static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
 /**
  * The player has arrived on a level (files.cc load_level(), whenever the
  * arrival makes changes): run the floor clock's arrival logic, settle the
- * fetch quest of the floor left behind when this is a new floor, then check
+ * fetch quest of the floor left behind when this is a new floor, place a
+ * new connected floor's boss if it has one (dcc_place_boss()), then check
  * the achievements (a floor reached, a floor left early). Unlocks from one
  * arrival interrupt the player once.
  *
@@ -322,6 +324,8 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
     {
         dcc_quest_floor_left(old_place);
     }
+    if (just_created && is_connected_branch(here))
+        dcc_place_boss();
     dcc_check_achievements();
 }
 

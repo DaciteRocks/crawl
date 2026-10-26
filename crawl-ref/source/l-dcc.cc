@@ -12,6 +12,7 @@ module "dcc"
 #include "dcc.h"
 #include "branch.h"
 #include "dcc-achieve.h"
+#include "dcc-boss.h"
 #include "dcc-boxes.h"
 #include "dcc-clock.h"
 #include "dcc-quest.h"
@@ -1319,6 +1320,58 @@ LUAFN(dcc_steward_pos_lua)
     return 2;
 }
 
+/*** The floor bosses (dcc_boss_table()), in floor order.
+ * @treturn table an array of { place = string ("D:3"), name = string
+ *   ("the Opening Act"), base = string (its monster type, "ogre") }
+ * @function boss_floors
+ */
+LUAFN(dcc_boss_floors_lua)
+{
+    lua_newtable(ls);
+    int i = 0;
+    for (const dcc_boss &boss : dcc_boss_table())
+    {
+        lua_newtable(ls);
+        const string place = level_id(boss.branch, boss.depth).describe();
+        lua_pushstring(ls, place.c_str());
+        lua_setfield(ls, -2, "place");
+        lua_pushstring(ls, boss.name);
+        lua_setfield(ls, -2, "name");
+        lua_pushstring(ls, boss.base);
+        lua_setfield(ls, -2, "base");
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Where the current level's floor boss stands, and its name, if the level
+ * holds one (dcc_find_boss()).
+ * @treturn int|nil x
+ * @treturn int|nil y
+ * @treturn string|nil name, as the game names it when seen ("the Opening
+ *   Act")
+ * @function boss_pos
+ */
+LUAFN(dcc_boss_pos_lua)
+{
+    const monster *boss = dcc_find_boss();
+    if (!boss)
+        return 0;
+    lua_pushinteger(ls, boss->pos().x);
+    lua_pushinteger(ls, boss->pos().y);
+    lua_pushstring(ls, boss->name(DESC_THE, true).c_str());
+    return 3;
+}
+
+/*** How many monsters on the current level carry the floor boss prop.
+ * @treturn int
+ * @function boss_count
+ */
+LUAFN(dcc_boss_count_lua)
+{
+    PLUARET(integer, dcc_boss_count());
+}
+
 /*** The Floor Steward's cell is in view: note the quest offer for the main
  * loop (dcc_steward_seen()). The steward's function_in_los marker calls
  * this (dcc_steward_seen() in dat/dlua/dcc.lua).
@@ -1450,6 +1503,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "take_pending_offer", dcc_take_pending_offer_lua },
 { "ask_offer", dcc_ask_offer_lua },
 { "fire_los", dcc_fire_los_lua },
+{ "boss_floors", dcc_boss_floors_lua },
+{ "boss_pos", dcc_boss_pos_lua },
+{ "boss_count", dcc_boss_count_lua },
 { nullptr, nullptr }
 };
 
