@@ -9,6 +9,7 @@ module "dcc"
 #include "l-libs.h"
 
 #include "cluautil.h"
+#include "colour.h" // colour_to_str
 #include "dcc.h"
 #include "branch.h"
 #include "dcc-achieve.h"
@@ -18,6 +19,7 @@ module "dcc"
 #include "dcc-quest.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
+#include "dcc-theme.h"
 #include "coord.h"
 #include "delay.h" // handle_delay, stop_delay
 #include "coordit.h"
@@ -1497,6 +1499,116 @@ LUAFN(dcc_see_monster_lua)
     return 0;
 }
 
+/*** The time/status command's floor clock line (dcc_floor_clock_summary()).
+ * @treturn string
+ * @function floor_clock_summary
+ */
+LUAFN(dcc_floor_clock_summary_lua)
+{
+    PLUARET(string, dcc_floor_clock_summary().c_str());
+}
+
+// A place argument ("D:3"), or the current level when it is absent.
+static level_id _place_arg(lua_State *ls, int arg, const char *fn)
+{
+    if (lua_isnoneornil(ls, arg))
+        return level_id::current();
+    const string place = luaL_checkstring(ls, arg);
+    string error;
+    try
+    {
+        return level_id::parse_level_id(place);
+    }
+    catch (const bad_level_id &err)
+    {
+        error = err.what();
+    }
+    // Outside the handler: luaL_error() does not return.
+    luaL_error(ls, "dcc.%s(): %s", fn, error.c_str());
+    return level_id();
+}
+
+/*** The theme of a floor (dcc_theme_for()).
+ * @tparam[opt] string place a level ("D:3"); default the current level
+ * @treturn string|nil the theme's id ("crowd"), or nil if it has none
+ * @function theme_for
+ */
+LUAFN(dcc_theme_for_lua)
+{
+    const dcc_theme *theme = dcc_theme_for(_place_arg(ls, 1, "theme_for"));
+    if (!theme)
+        return 0;
+    PLUARET(string, theme->id);
+}
+
+/*** The whole theme table (dcc_theme_table()).
+ * @treturn table an array of { id=, name=, blurb=, mon_list=,
+ *   floor_colour=, rock_colour= (colour names), clock_percent=,
+ *   quest_tier_bump=, extra_monsters= }
+ * @function theme_table
+ */
+LUAFN(dcc_theme_table_lua)
+{
+    lua_newtable(ls);
+    int i = 0;
+    for (const dcc_theme &theme : dcc_theme_table())
+    {
+        lua_newtable(ls);
+        lua_pushstring(ls, theme.id);
+        lua_setfield(ls, -2, "id");
+        lua_pushstring(ls, theme.name);
+        lua_setfield(ls, -2, "name");
+        lua_pushstring(ls, theme.blurb);
+        lua_setfield(ls, -2, "blurb");
+        lua_pushstring(ls, theme.mon_list);
+        lua_setfield(ls, -2, "mon_list");
+        lua_pushstring(ls, colour_to_str(theme.floor_colour).c_str());
+        lua_setfield(ls, -2, "floor_colour");
+        lua_pushstring(ls, colour_to_str(theme.rock_colour).c_str());
+        lua_setfield(ls, -2, "rock_colour");
+        lua_pushinteger(ls, theme.clock_percent);
+        lua_setfield(ls, -2, "clock_percent");
+        lua_pushinteger(ls, theme.quest_tier_bump);
+        lua_setfield(ls, -2, "quest_tier_bump");
+        lua_pushinteger(ls, theme.extra_monsters);
+        lua_setfield(ls, -2, "extra_monsters");
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Give a floor a theme, as if it had been drawn for it; a later build of
+ * that floor keeps it. Script/test only.
+ * @tparam string place a level ("D:5")
+ * @tparam string id a theme id from theme_table()
+ * @function set_theme
+ */
+LUAFN(dcc_set_theme_lua)
+{
+    const string place = luaL_checkstring(ls, 1);
+    const string id = luaL_checkstring(ls, 2);
+    if (!_dcc_script_only(ls, "set_theme"))
+        return 0;
+    if (!dcc_theme_by_id(id))
+        return luaL_error(ls, "dcc.set_theme(): unknown theme '%s'", id.c_str());
+    const level_id lid = _place_arg(ls, 1, "set_theme");
+    you.props[DCC_THEMES_KEY].get_table()[lid.describe()] = id;
+    return 0;
+}
+
+/*** Forget every floor's theme and the last one assigned, as at the start
+ * of a game. Script/test only.
+ * @function reset_themes
+ */
+LUAFN(dcc_reset_themes_lua)
+{
+    if (!_dcc_script_only(ls, "reset_themes"))
+        return 0;
+    you.props.erase(DCC_THEMES_KEY);
+    you.props.erase(DCC_LAST_THEME_KEY);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1576,6 +1688,11 @@ static const struct luaL_Reg dcc_dlib[] =
 { "boss_far_percent", dcc_boss_far_percent_lua },
 { "walk_distance", dcc_walk_distance_lua },
 { "see_monster", dcc_see_monster_lua },
+{ "theme_for", dcc_theme_for_lua },
+{ "theme_table", dcc_theme_table_lua },
+{ "set_theme", dcc_set_theme_lua },
+{ "reset_themes", dcc_reset_themes_lua },
+{ "floor_clock_summary", dcc_floor_clock_summary_lua },
 { nullptr, nullptr }
 };
 
