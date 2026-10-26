@@ -32,6 +32,7 @@
 #include "activity-interrupt-type.h"
 #include "branch.h"
 #include "dcc-clock.h" // DCC_COLLAPSED_COUNT_KEY, DCC_FLOOR_CLOCK_PLACE_KEY
+#include "dcc-quest.h" // dcc_quest_kill_counted
 #include "delay.h" // interrupt_activity
 #include "hiscores.h" // mark_milestone
 #include "items.h" // runes_in_pack
@@ -467,6 +468,9 @@ void dcc_monster_killed(const monster &mons, killer_type killer,
     // a charmed hostile passes it and counts, as it gives XP.
     if (testbits(mons.flags, MF_PACIFIED))
         return;
+
+    // The kill quest's DET_MONSTER_DIED listener asks about this death next.
+    dcc_quest_kill_counted(mons);
 
     dcc_unlock_batch batch;
     dcc_unlock("first_blood");

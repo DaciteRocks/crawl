@@ -21,6 +21,7 @@
 #include "branch.h"
 #include "dcc.h" // dcc_announce
 #include "dcc-achieve.h"
+#include "dcc-quest.h" // dcc_quest_floor_left
 #include "message.h"
 #include "notes.h"
 #include "player.h"
@@ -294,7 +295,8 @@ static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
 
 /**
  * The player has arrived on a level (files.cc load_level(), whenever the
- * arrival makes changes): run the floor clock's arrival logic, then check
+ * arrival makes changes): run the floor clock's arrival logic, settle the
+ * fetch quest of the floor left behind when this is a new floor, then check
  * the achievements (a floor reached, a floor left early). Unlocks from one
  * arrival interrupt the player once.
  *
@@ -309,7 +311,17 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
         return;
 
     dcc_unlock_batch batch;
+    // The connected floor the clock belonged to before this arrival.
+    const string old_place = you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY)
+                             ? you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string()
+                             : string();
     _enter_floor_clock(just_created, how);
+    const level_id here = level_id::current();
+    if (just_created && is_connected_branch(here)
+        && old_place != here.describe())
+    {
+        dcc_quest_floor_left(old_place);
+    }
     dcc_check_achievements();
 }
 

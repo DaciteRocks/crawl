@@ -7,7 +7,9 @@
 # that charges normal DCSS prices and the loot box kiosk (K): a plain floor
 # cell whose marker opens the player's boxes when they step onto it
 # (dcc_kiosk_activate() in dlua/dcc.lua, dcc-boxes.cc), and whose dcc_kiosk
-# property is what makes it a kiosk. Every cell inside the walls is dcc_safe:
+# property is what makes it a kiosk. The epilogue sets up the floor's quest
+# on the player's first arrival (dcc_quest_setup() in dlua/dcc_quests.lua).
+# Every cell inside the walls is dcc_safe:
 # hostile monsters cannot enter, and there is no combat inside (dcc-safe.cc).
 # The door stays an ordinary cell, the way out for a hostile that ends up
 # inside.
@@ -27,6 +29,7 @@
 ###############################################################################
 
 : crawl_require('dlua/dcc.lua')
+: crawl_require('dlua/dcc_quests.lua')
 
 # Door to the south.
 NAME:   dcc_safe_room_a
@@ -38,6 +41,9 @@ KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
 MAP
 xxxxxxxxx
 x{..S..(x
@@ -56,6 +62,9 @@ KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
 MAP
 xxxx+xxxx
 x.......x
@@ -74,6 +83,9 @@ KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
 MAP
 xxxxxxx
 x{...Sx
@@ -94,6 +106,9 @@ KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
 MAP
 xxxxxxx
 xS...{x
