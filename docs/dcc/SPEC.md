@@ -160,7 +160,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6a | Boss placement | done 2026-10-25 |
 | 6b | Boss intro, kill achievement and box | done 2026-10-25 |
 | 6c | Theme assignment and Announcer blurb | done 2026-10-25 |
-| 6d | Themes bite: monsters, colours, clock, quest tier | not started |
+| 6d | Themes bite: monsters, colours, clock, quest tier | done 2026-10-25 |
 | 6e | Sponsor booth in the D:3 safe room | not started |
 | 6f | Sponsor signing: join hook and Gold box | not started |
 | 6g | Species re-pick core | not started |
@@ -812,7 +812,7 @@ Status: done 2026-10-25
 monster list (`set_vault_mon_list`), floor and rock colours, extra
 monsters on arrival, the clock percent (`dcc_floor_turns_for`) and the
 quest band tier (`dcc_quests.lua`). ~5 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6e — Sponsor booth in the D:3 safe room
 `docs/dcc/phases/6e-sponsor-booth.md`. Four larger safe-room variants

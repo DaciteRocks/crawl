@@ -1653,6 +1653,21 @@ LUAFN(dcc_level_colours_lua)
     return 2;
 }
 
+/*** Apply the current level's theme build levers again
+ * (dcc_apply_theme_build()), as its build did after the layout: the
+ * monster list and colours, each only where the level still has trunk's
+ * default. Does nothing on an unthemed level. Script/test only.
+ * @function apply_theme_build
+ */
+LUAFN(dcc_apply_theme_build_lua)
+{
+    if (!_dcc_script_only(ls, "apply_theme_build"))
+        return 0;
+    if (const dcc_theme *theme = dcc_theme_for(level_id::current()))
+        dcc_apply_theme_build(*theme);
+    return 0;
+}
+
 /*** Count the monsters on the current level.
  * @treturn table { total=, undead=, outside_vaults=,
  *   undead_outside_vaults= }
@@ -1770,6 +1785,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "theme_quest_bump", dcc_theme_quest_bump_lua },
 { "level_colours", dcc_level_colours_lua },
 { "monster_counts", dcc_monster_counts_lua },
+{ "apply_theme_build", dcc_apply_theme_build_lua },
 { nullptr, nullptr }
 };
 

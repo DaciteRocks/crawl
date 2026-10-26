@@ -2337,6 +2337,40 @@ local function phase6d()
         "a Reruns floor is grey (" .. floor .. ", " .. rock .. ")")
   check(dcc.theme_quest_bump() == 0, "Reruns bumps no quest tier")
 
+  -- A layout or encompass vault that set its own monster list or colours
+  -- keeps them: the theme fills in only trunk's defaults. Here the level's
+  -- list and colours are set as such a vault would, then the theme's build
+  -- levers run again.
+  dgn.set_random_mon_list("goblin")
+  dgn.change_floor_colour("blue")
+  dgn.change_rock_colour("green")
+  dcc.apply_theme_build()
+  floor, rock = dcc.level_colours()
+  check(floor == "blue" and rock == "green",
+        "a vault's colours survive the theme (" .. floor .. ", " .. rock
+        .. ")")
+  -- The list is read back through the monsters the level's own random
+  -- placement makes: Crowd Work's arrival extras (mons_place(), as level
+  -- population and later spawns use) come from it.
+  local function goblins()
+    local n = 0
+    for x = 1, dgn.GXM - 2 do
+      for y = 1, dgn.GYM - 2 do
+        local m = dgn.mons_at(x, y)
+        if m and m.name == "goblin" then
+          n = n + 1
+        end
+      end
+    end
+    return n
+  end
+  dcc.set_theme("D:5", "crowd")
+  local had = goblins()
+  dcc.arrival_spot("stairs_i")
+  dcc.enter_floor(true)
+  check(goblins() >= had + 4, "a vault's monster list survives the theme ("
+        .. had .. " -> " .. goblins() .. " goblins)")
+
   -- Crowd Work: extra monsters on the first arrival, the normal clock.
   dcc.set_theme("D:6", "crowd")
   debug.goto_place("D:6")

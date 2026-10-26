@@ -129,4 +129,35 @@ status light starts at 720 and the steward offers a Silver quest on D:2–4.
   columns (`LFLOORTILE`-style `env.tile_default`) are out of scope; the
   Announcer line is the tiles player's cue.
 
-Status: not started
+## As built (deviations from the text above)
+
+- `_concrete_specs()` expands derived specs. Trunk's
+  `set_vault_mon_list()` keeps only the place of a `place:` spec and drops
+  a zombie/draugr/spectre modifier (and `band`), so `place:D:5 zombie`
+  would give live D:5 monsters. Each such spec becomes up to 12 concrete
+  "<base> zombie" entries, bases rolled from the place with the tests
+  `mons_list::get_zombie_type()` uses. Weights: every spec's weight is
+  scaled by 12, and a derived spec's scaled weight is split evenly across
+  its bases (at least 1 each), so Reruns keeps its 5:3:1 mix however many
+  bases each kind finds.
+- Reruns uses `draugr`, not `skeleton`: this trunk has no `skeleton`
+  modifier (`get_zombie_type()` knows zombie, draugr, simulacrum,
+  spectre), and "place:D:5 skeleton" silently meant plain D:5 monsters.
+- Crowd Work's list is just `place:{here}`: the `band` token did nothing
+  for a `place:` entry. Its bands come from trunk's normal
+  `MG_PERMIT_BANDS` (the level builder and `mons_place()` both set it).
+- A branch with no monster population (the Temple) gets no theme monster
+  list and no arrival extras; `set_vault_mon_list()` would assert on it.
+- A layout or encompass vault placed before the theme applies keeps its
+  own monster list (`vault_mon_weights` already set) and any non-BLACK
+  floor or rock colour; the theme fills in only trunk's defaults. A vault
+  placed later still overrides the theme.
+- Script-only dlua: `dcc.set_theme(place, nil)` clears a floor's theme;
+  `dcc.apply_theme_build()` re-runs the build levers on the current level
+  (the smoke uses it to check that a vault's list and colours survive).
+- Earlier smoke checks made theme-proof: the clock checks reset the themes
+  the opening builds gave D:6 and D:12; Phase 6a's boss arrival clears the
+  floor's theme (Crowd Work extras could share the boss's kind); the
+  quick_exit 40% check takes 40% of the floor's real total.
+
+Status: done 2026-10-25

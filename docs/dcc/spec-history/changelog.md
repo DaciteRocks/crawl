@@ -351,3 +351,19 @@ clock summary names it. dlua `theme_for`, `theme_table`, script-only
 hooks. Deviations are listed in the phase file (the extra binding, the
 unknown-id check, the theme on both clock lines, Temple and Tomb themed).
 The review found nothing to fix; every finding was verified and dropped.
+
+## 2026-10-25 — Phase 6d done
+
+Landed: floor themes bite. Every build of a themed floor sets its random
+monster list (`set_vault_mon_list`) and floor/rock colours
+(`dcc_apply_theme_build`, from `dcc_assign_theme`); the first arrival
+places its extra monsters (`dcc_apply_theme_arrival`, from
+`dcc_enter_floor`); `dcc_floor_turns_for` scales the clock by the theme's
+percent; `band_for` in `dcc_quests.lua` bumps the quest's box tier. dlua
+`theme_mon_list`, `theme_quest_bump`, `level_colours`, `monster_counts`,
+script-only `apply_theme_build` and `set_theme(place, nil)`. No trunk
+hooks. Deviations are in the phase file (derived specs expanded to
+concrete bases, draugr for skeleton, no-monster branches skipped, earlier
+smoke checks made theme-proof). Review fixes: a layout/encompass vault's
+own monster list and colours now win over the theme; Crowd Work's dead
+`band` token dropped; derived-spec weights split across bases.
