@@ -300,7 +300,7 @@ renamed `main.cc` call (6i). Nine open questions with defaults are listed
 in SPEC.md under "Open questions for Phase 6"; phases proceed under the
 defaults.
 
-## 2026-10-25 � Phase 6a done
+## 2026-10-25 — Phase 6a done
 
 Landed: `dcc-boss.cc` holds five bosses (D:3, D:6, D:9, D:12, Zot:5; des
 MONS specs, names, and 6b's intro/death lines and achievement ids). A
@@ -321,3 +321,19 @@ trunk files touched. Reviewers changed:
   vaults; the `vaults_ok` search is tested directly on Dis:7 (always
   encompass; Zot:5 is encompass only for some layouts); a boss kill against
   an ogre kill quest; the misnamed "rebuild" check is relabelled.
+
+## 2026-10-25 — Phase 6b done
+
+Landed: the first sight of a floor boss (one guarded hook in
+`player-notices.cc` `seen_monster()`, after `MF_SEEN` is set) gives the
+Announcer's intro, a note and a `dcc.boss` milestone, once (`dcc_boss_seen`
+monster prop, saved with the level). A counted kill (player or ally) gives
+the death line and unlocks the floor's `boss_*` achievement: five event
+rows, Gold (D:3, D:6), Platinum (D:9, D:12), Legendary (Zot:5). The row
+comes from the boss's prop (`dcc_boss_row()`). New script-only dlua
+`dcc.see_monster()`; `dcc.boss_floors()` also returns intro, death and
+achievement. Deviations are listed in the phase file (non-const
+`dcc_monster_seen`, death line via `mprf` for one interrupt, extra
+ally/hostile-kill smoke checks, 6a's lines kept). The review found nothing
+to fix; three low findings were verified and dropped. Also fixed the 6a
+heading's dash, which had been written as a cp1252 byte.

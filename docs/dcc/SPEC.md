@@ -158,7 +158,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 5a | Quest engine (Lua, four objective kinds) | done 2026-10-25 |
 | 5b | Quest giver NPC and offer flow | done 2026-10-25 |
 | 6a | Boss placement | done 2026-10-25 |
-| 6b | Boss intro, kill achievement and box | not started |
+| 6b | Boss intro, kill achievement and box | done 2026-10-25 |
 | 6c | Theme assignment and Announcer blurb | not started |
 | 6d | Themes bite: monsters, colours, clock, quest tier | not started |
 | 6e | Sponsor booth in the D:3 safe room | not started |
@@ -798,7 +798,7 @@ Status: done 2026-10-25
 first sight (one guarded hook in `player-notices.cc` `seen_monster()`) and
 a counted kill unlocks `boss_<floor>` (five new achievement rows, Gold to
 Legendary). ~7 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6c — Theme assignment and Announcer blurb
 `docs/dcc/phases/6c-theme-assignment.md`. Four themes as a C++ table

@@ -102,4 +102,19 @@ box, visible in `?:` notes; open the box at the next kiosk.
   polymorph); the per-monster `dcc_boss_seen` flag makes repeats harmless.
 - A polymorphed boss keeps `mons.props`, so it still counts; accepted.
 
-Status: not started
+## As built (deviations from the text above)
+
+- `dcc_monster_seen()` takes `monster &`, not `const monster &`: it sets
+  the `dcc_boss_seen` prop, and `seen_monster()` already holds a non-const
+  monster.
+- `dcc_boss_killed()` prints the death line with `mprf(MSGCH_DCC, ...)`,
+  not `dcc_announce()`, so the kill's `dcc_unlock_batch` interrupts the
+  player once for the line and the unlock together.
+- `dcc.boss_floors()` also returns each boss's `intro`, `death` and
+  `achievement`; the smoke checks the exact lines and runs the
+  trademark-name ban over them.
+- The smoke adds two checks beyond the list above: an ally's kill pays
+  (D:9, Platinum) and a hostile monster's kill pays nothing (D:12).
+- The intro and death lines are 6a's table lines, not the examples above.
+
+Status: done 2026-10-25
