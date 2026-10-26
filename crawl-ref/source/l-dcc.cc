@@ -32,6 +32,7 @@ module "dcc"
 #include "env.h"
 #include "god-item.h" // god_forbids_item
 #include "items.h" // stack_iterator
+#include "mapdef.h" // item_list
 #include "mapmark.h"
 #include "religion.h" // str_to_god
 #include "fight.h"
@@ -1912,6 +1913,73 @@ LUAFN(dcc_set_lives_lua)
     return 0;
 }
 
+/*** The kits (dcc_kit_table()). Each entry is { id=, name=, blurb=,
+ * items= (array of des item specs), valid= (every spec parses) }.
+ * @treturn table array of kits
+ * @function kits
+ */
+LUAFN(dcc_kits_lua)
+{
+    lua_newtable(ls);
+    int i = 0;
+    for (const dcc_kit &kit : dcc_kit_table())
+    {
+        lua_newtable(ls);
+        lua_pushstring(ls, kit.id);
+        lua_setfield(ls, -2, "id");
+        lua_pushstring(ls, kit.name);
+        lua_setfield(ls, -2, "name");
+        lua_pushstring(ls, kit.blurb);
+        lua_setfield(ls, -2, "blurb");
+        lua_newtable(ls);
+        bool valid = true;
+        int j = 0;
+        for (const char *spec : kit.items)
+        {
+            item_list list;
+            if (!list.add_item(spec).empty())
+                valid = false;
+            lua_pushstring(ls, spec);
+            lua_rawseti(ls, -2, ++j);
+        }
+        lua_setfield(ls, -2, "items");
+        lua_pushboolean(ls, valid);
+        lua_setfield(ls, -2, "valid");
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Give a kit at the player's feet (dcc_give_kit()). Script/test only.
+ * @tparam string id the kit's id
+ * @tparam[opt=false] boolean force give it even if a kit was given
+ * @treturn boolean whether the kit was given
+ * @function give_kit
+ */
+LUAFN(dcc_give_kit_lua)
+{
+    const string id = luaL_checkstring(ls, 1);
+    const bool force = lua_toboolean(ls, 2);
+    if (!_dcc_script_only(ls, "give_kit"))
+        return 0;
+    PLUARET(boolean, dcc_give_kit(id, force));
+}
+
+/*** The id of the kit given this game, or nil.
+ * @treturn string|nil
+ * @function kit
+ */
+LUAFN(dcc_kit_lua)
+{
+    if (!you.props.exists(DCC_KIT_KEY))
+    {
+        lua_pushnil(ls);
+        return 1;
+    }
+    lua_pushstring(ls, you.props[DCC_KIT_KEY].get_string().c_str());
+    return 1;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -2014,6 +2082,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "repick_pool", dcc_repick_pool_lua },
 { "repick_roll", dcc_repick_roll_lua },
 { "set_lives", dcc_set_lives_lua },
+{ "kits", dcc_kits_lua },
+{ "give_kit", dcc_give_kit_lua },
+{ "kit", dcc_kit_lua },
 { nullptr, nullptr }
 };
 

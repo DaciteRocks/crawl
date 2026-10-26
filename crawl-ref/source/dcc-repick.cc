@@ -11,7 +11,9 @@
  * (dcc_repick_decline()) keeps everything. Either spends the offer: it is
  * one re-roll per game, and a revisit, a reload or any other floor never
  * offers it again. Jobs cannot change in DCSS, so the re-pick is
- * species-only; kits (Phase 6h) stand in for the class.
+ * species-only; kits (Phase 6h, dcc_give_kit()) stand in for the class:
+ * a few fixed item specs dropped at the player's feet, never written into
+ * the pack, one kit per game.
 **/
 
 #include "AppHdr.h"
@@ -22,13 +24,19 @@
 
 #include "act-iter.h" // monster_iterator
 #include "branch-type.h"
+#include "coordit.h" // distance_iterator
 #include "dcc.h" // dcc_announce
 #include "dcc-achieve.h" // dcc_check_achievements, dcc_unlock_batch
+#include "dcc-boxes.h" // dcc_free_item_slots
 #include "dcc-room.h" // dcc_settle_sponsor_booth
 #include "english.h" // article_a
 #include "env.h"
 #include "hiscores.h" // mark_milestone
+#include "dungeon.h" // dgn_place_multiple_items
+#include "items.h" // link_items
 #include "level-id.h"
+#include "mapdef.h" // item_list
+#include "message.h"
 #include "monster.h"
 #include "mutation-type.h"
 #include "notes.h"
@@ -38,6 +46,7 @@
 #include "species.h"
 #include "state.h"
 #include "stringutil.h" // make_stringf
+#include "terrain.h" // feat_is_solid, feat_eliminates_items
 
 /// The first floor the offer rolls on: D:3, or the first Dungeon floor
 /// below it the player reaches (a shaft from D:2 skips D:3).
@@ -229,4 +238,109 @@ void dcc_repick_decline()
     _clear_offer();
     dcc_announce("Keeping the original. Bold. The sponsors wanted a "
                  "redesign.");
+}
+
+/// The kits. Specs are des ITEM: syntax (docs/develop/levels/syntax.txt);
+/// the smoke checks that every line parses. "Good" items, not
+/// acquirement-grade: boxes are the loot mechanic.
+static const vector<dcc_kit> _kits =
+{
+    { "steel", "Steel",
+      "A sword, a shirt, and something to hide behind.",
+      { "long sword good_item", "scale mail good_item", "kite shield",
+        "potion of might q:2" } },
+    { "arcana", "Arcana",
+      "Spells, a robe, and the ring the budget allowed.",
+      { "book of flames", "robe ego:resistance", "ring of magical power",
+        "potion of magic q:3" } },
+    { "supplies", "Supplies",
+      "For the contestant who plans to run.",
+      { "potion of heal wounds q:3", "scroll of blinking q:2",
+        "scroll of teleportation q:3", "potion of haste q:2" } },
+};
+
+const vector<dcc_kit> &dcc_kit_table()
+{
+    return _kits;
+}
+
+/// The kit with this id, or nullptr.
+const dcc_kit *dcc_find_kit(const string &id)
+{
+    for (const dcc_kit &kit : _kits)
+        if (id == kit.id)
+            return &kit;
+    return nullptr;
+}
+
+/// Can items lie here and stay reachable?
+static bool _kit_cell_ok(const coord_def &c)
+{
+    const dungeon_feature_type feat = env.grid(c);
+    return !feat_is_solid(feat) && !feat_eliminates_items(feat);
+}
+
+/// Where the kit lands: the player's cell, or (flying over lava or deep
+/// water) the nearest cell in sight where the items stay reachable.
+static coord_def _kit_spot()
+{
+    if (_kit_cell_ok(you.pos()))
+        return you.pos();
+    for (distance_iterator di(you.pos(), false, true, LOS_RADIUS); di; ++di)
+        if (_kit_cell_ok(*di) && you.see_cell_no_trans(*di))
+            return *di;
+    return you.pos();
+}
+
+/**
+ * Give the player a kit: its items, made from the table's specs with
+ * trunk's dgn_place_multiple_items(), land on the floor at the player's
+ * feet (never in the pack, so a full inventory does not matter). The
+ * Announcer names it, a note records it, and the one-shot is spent.
+ *
+ * @param id     the kit's id in dcc_kit_table().
+ * @param force  give it even if a kit was already given (scripts).
+ * @return       false, giving nothing, outside Crawl Live, for an unknown
+ *               id, when a kit was already given (unless forced), or when
+ *               the level's item table has no room for the kit (the
+ *               Announcer says so and the one-shot is kept for later).
+ */
+bool dcc_give_kit(const string &id, bool force)
+{
+    if (!crawl_state.game_is_dcc())
+        return false;
+    const dcc_kit *kit = dcc_find_kit(id);
+    if (!kit || (you.props.exists(DCC_KIT_KEY) && !force))
+        return false;
+
+    item_list list;
+    for (const char *spec : kit->items)
+    {
+        const string err = list.add_item(spec);
+        if (!err.empty())
+        {
+            mprf(MSGCH_ERROR, "DCC kit %s: bad item spec \"%s\": %s",
+                 kit->id, spec, err.c_str());
+        }
+    }
+
+    // Each spec makes one item; never make trunk cull the level's items.
+    if (dcc_free_item_slots() < static_cast<int>(list.size()))
+    {
+        dcc_announce(make_stringf("The %s kit is stuck in the chute: this "
+                                  "floor is too cluttered for a delivery. "
+                                  "Clear some space and ask again.",
+                                  kit->name));
+        return false;
+    }
+
+    dgn_place_multiple_items(list, _kit_spot());
+    link_items();
+
+    you.props[DCC_KIT_KEY].get_string() = kit->id;
+    dcc_announce(make_stringf("Kit delivered: %s. %s", kit->name,
+                              kit->blurb));
+    take_note(Note(NOTE_MESSAGE, 0, 0,
+                   make_stringf("Received the %s kit", kit->name)));
+    return true;
 }
