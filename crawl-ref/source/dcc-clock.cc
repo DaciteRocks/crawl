@@ -23,6 +23,7 @@
 #include "dcc-achieve.h"
 #include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
+#include "dcc-repick.h" // dcc_repick_arrived
 #include "dcc-room.h" // dcc_settle_sponsor_booth
 #include "dcc-sponsor.h" // dcc_sponsor_intro
 #include "dcc-theme.h" // dcc_announce_theme, dcc_theme_for, ...
@@ -343,6 +344,7 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
         dcc_announce_theme();
         dcc_apply_theme_arrival();
         dcc_place_boss();
+        dcc_repick_arrived();
     }
     dcc_check_achievements();
 }

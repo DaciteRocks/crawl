@@ -327,6 +327,7 @@ python.exe util/gen-all.py</Command>
     <ClCompile Include="..\dcc-boxes.cc" />
     <ClCompile Include="..\dcc-clock.cc" />
     <ClCompile Include="..\dcc-quest.cc" />
+    <ClCompile Include="..\dcc-repick.cc" />
     <ClCompile Include="..\dcc-room.cc" />
     <ClCompile Include="..\dcc-safe.cc" />
     <ClCompile Include="..\dcc-sponsor.cc" />
@@ -702,6 +703,7 @@ python.exe util/gen-all.py</Command>
     <ClInclude Include="..\dcc-boxes.h" />
     <ClInclude Include="..\dcc-clock.h" />
     <ClInclude Include="..\dcc-quest.h" />
+    <ClInclude Include="..\dcc-repick.h" />
     <ClInclude Include="..\dcc-room.h" />
     <ClInclude Include="..\dcc-safe.h" />
     <ClInclude Include="..\dcc-sponsor.h" />

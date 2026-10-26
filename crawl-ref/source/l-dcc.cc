@@ -18,6 +18,7 @@ module "dcc"
 #include "dcc-boxes.h"
 #include "dcc-clock.h"
 #include "dcc-quest.h"
+#include "dcc-repick.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
 #include "dcc-sponsor.h"
@@ -45,6 +46,7 @@ module "dcc"
 #include "player.h"
 #include "player-notices.h" // seen_monster
 #include "shopping.h"
+#include "species.h" // species::name, from_str_loose
 #include "spl-util.h"
 #include "state.h"
 #include "stringutil.h" // starts_with
@@ -1773,6 +1775,99 @@ LUAFN(dcc_at_booth_lua)
     PLUARET(boolean, dcc_at_sponsor_booth());
 }
 
+/*** Is a floor-3 species re-pick offer waiting (dcc_repick_pending())?
+ * @treturn boolean
+ * @function repick_pending
+ */
+LUAFN(dcc_repick_pending_lua)
+{
+    PLUARET(boolean, dcc_repick_pending());
+}
+
+/*** How the one re-pick was spent: the new species' name, "declined", or
+ * nil while it is unspent.
+ * @treturn string|nil
+ * @function repicked
+ */
+LUAFN(dcc_repicked_lua)
+{
+    if (!you.props.exists(DCC_REPICKED_KEY))
+    {
+        lua_pushnil(ls);
+        return 1;
+    }
+    lua_pushstring(ls, you.props[DCC_REPICKED_KEY].get_string().c_str());
+    return 1;
+}
+
+/*** The pending offer's species (dcc_repick_choices()). Script/test only.
+ * @treturn table array of species names; empty with no offer pending
+ * @function repick_choices
+ */
+LUAFN(dcc_repick_choices_lua)
+{
+    if (!_dcc_script_only(ls, "repick_choices"))
+        return 0;
+    lua_newtable(ls);
+    int i = 0;
+    for (species_type sp : dcc_repick_choices())
+    {
+        lua_pushstring(ls, species::name(sp).c_str());
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Take the re-pick offer as the named species (dcc_repick_apply()).
+ * Script/test only.
+ * @tparam string species a species name (species::from_str_loose)
+ * @treturn boolean false (and no change) unless an offer is pending and
+ *   the species is one of its choices
+ * @function repick
+ */
+LUAFN(dcc_repick_lua)
+{
+    const string name = luaL_checkstring(ls, 1);
+    if (!_dcc_script_only(ls, "repick"))
+        return 0;
+    // An exact name first (dcc.repick_choices() gives exact names), so a
+    // name that is part of another species' name cannot pick that one.
+    species_type sp = SP_UNKNOWN;
+    for (species_type si : species::get_all_species())
+        if (lowercase_string(species::name(si)) == lowercase_string(name))
+            sp = si;
+    if (sp == SP_UNKNOWN)
+        sp = species::from_str_loose(name);
+    if (sp == SP_UNKNOWN)
+        return luaL_error(ls, "dcc.repick(): no species '%s'", name.c_str());
+    PLUARET(boolean, dcc_repick_apply(sp));
+}
+
+/*** Decline the re-pick offer (dcc_repick_decline()). Script/test only.
+ * @function repick_decline
+ */
+LUAFN(dcc_repick_decline_lua)
+{
+    if (!_dcc_script_only(ls, "repick_decline"))
+        return 0;
+    dcc_repick_decline();
+    return 0;
+}
+
+/*** Forget the re-pick entirely (the offer, its choices and how it was
+ * spent), as in a game that never reached D:3. Script/test only.
+ * @function reset_repick
+ */
+LUAFN(dcc_reset_repick_lua)
+{
+    if (!_dcc_script_only(ls, "reset_repick"))
+        return 0;
+    you.props.erase(DCC_REPICK_OFFER_KEY);
+    you.props.erase(DCC_REPICK_CHOICES_KEY);
+    you.props.erase(DCC_REPICKED_KEY);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1866,6 +1961,12 @@ static const struct luaL_Reg dcc_dlib[] =
 { "join_god", dcc_join_god_lua },
 { "sponsor", dcc_sponsor_lua },
 { "at_booth", dcc_at_booth_lua },
+{ "repick_pending", dcc_repick_pending_lua },
+{ "repicked", dcc_repicked_lua },
+{ "repick_choices", dcc_repick_choices_lua },
+{ "repick", dcc_repick_lua },
+{ "repick_decline", dcc_repick_decline_lua },
+{ "reset_repick", dcc_reset_repick_lua },
 { nullptr, nullptr }
 };
 
