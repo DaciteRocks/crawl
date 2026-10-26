@@ -1,7 +1,8 @@
 /**
  * @file
  * @brief Crawl Live (DCC) floor bosses: one named, buffed monster placed on
- *        the first arrival at D:3, D:6, D:9, D:12 and Zot:5.
+ *        the first arrival at D:3, D:6, D:9, D:12 and Zot:5, introduced
+ *        on first sight, and paid for with an achievement when killed.
 **/
 
 #pragma once
@@ -14,6 +15,9 @@ class level_id;
 // The monster prop that marks a floor boss; its value is the floor's
 // level_id::describe() ("D:3").
 #define DCC_BOSS_KEY "dcc_boss"
+// The monster prop set once the Announcer has introduced the boss, so a
+// second sighting (or a reload) introduces nothing.
+#define DCC_BOSS_SEEN_KEY "dcc_boss_seen"
 
 // How far out a boss stands: at least this percent of the farthest good
 // spot's walking distance from where the player arrived (dcc_quest_spot()).
@@ -38,3 +42,6 @@ monster *dcc_find_boss();
 bool dcc_is_boss(const monster &mons);
 int dcc_boss_count();
 monster *dcc_place_boss();
+const dcc_boss *dcc_boss_row(const monster &mons);
+void dcc_monster_seen(monster &mons);
+void dcc_boss_killed(const monster &mons);

@@ -128,6 +128,10 @@ visibly DCC-only. Recorded exceptions:
   switch in `items.cc` (plus the `#include "dcc-boxes.h"` it needs), so a
   box item's description says it was won from a loot box. `AQ_DCC_BOX`
   items exist only in DCC games, so the case needs no guard.
+- Phase 6b (boss intro) adds one guarded call in `player-notices.cc`
+  `seen_monster()`, right after `mons->flags |= MF_SEEN;`: `if
+  (crawl_state.game_is_dcc()) dcc_monster_seen(*mons);` (plus `#include
+  "dcc-boss.h"`).
 - Phase 5b (Floor Steward quest offer) adds a new kind of hook: a guarded
   call in the main input loop that may prompt the player.
   `if (crawl_state.game_is_dcc()) dcc_quest_before_command();` sits in

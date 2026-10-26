@@ -2052,3 +2052,162 @@ local function phase6a()
         "D:3's boss survives a save round trip")
 end
 phase6a()
+
+-- Phase 6b: the Announcer introduces a boss on first sight; a counted kill
+-- gets its death line and unlocks the floor's boss_* achievement and box.
+local function phase6b()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local function said_nothing()
+    return since_mark():gsub("%s+", "") == ""
+  end
+  local function arrive(place)
+    debug.goto_place(place)
+    test.regenerate_level()
+    dcc.arrival_spot("stairs_i")
+    dcc.enter_floor(true)
+    local x, y, name = dcc.boss_pos()
+    check(x ~= nil, place .. " holds its boss (" .. tostring(name) .. ")")
+    return x, y, name
+  end
+  -- Hold every achievement a boss kill could also unlock (first_blood, and
+  -- the state ones the kill's check meets), so the kill adds exactly the
+  -- boss's box.
+  local function settle()
+    dcc.unlock("first_blood")
+    dcc.check_achievements()
+  end
+  local function last_box()
+    local b = dcc.boxes()
+    return b[#b]
+  end
+  -- A free floor cell next to (x, y) for a second monster.
+  local function next_to(x, y)
+    local px, py = you.pos()
+    for dy = -1, 1 do
+      for dx = -1, 1 do
+        local cx, cy = x + dx, y + dy
+        if not (dx == 0 and dy == 0)
+           and dgn.feature_name(dgn.grid(cx, cy)) == "floor"
+           and dgn.mons_at(cx, cy) == nil and not dcc.is_safe_cell(cx, cy)
+           and not (cx == px and cy == py) then
+          return cx, cy
+        end
+      end
+    end
+  end
+  local function killer_next_to(x, y, spec)
+    local cx, cy = next_to(x, y)
+    check(cx ~= nil, "a free cell next to the boss for: " .. spec)
+    local m = dgn.create_monster(cx, cy, spec)
+    check(m ~= nil, "the boss has a neighbour: " .. spec)
+    return mpos(m)
+  end
+
+  local ids = {}
+  for _, a in ipairs(dcc.achievement_table()) do
+    ids[a.id] = a.tier
+  end
+  local want = { ["D:3"] = "Gold", ["D:6"] = "Gold", ["D:9"] = "Platinum",
+                 ["D:12"] = "Platinum", ["Zot:5"] = "Legendary" }
+  local banned = { "carl", "donut", "mordecai", "syndicate", "borant",
+                   "dungeon crawler" }
+  -- The boss table's rows by place, for their exact lines.
+  local row = {}
+  for _, b in ipairs(dcc.boss_floors()) do
+    row[b.place] = b
+    check(ids[b.achievement] == want[b.place], b.place .. "'s "
+          .. b.achievement .. " is in the table with a " .. want[b.place]
+          .. " box (" .. tostring(ids[b.achievement]) .. ")")
+    check(b.intro ~= "" and b.death ~= "", b.name .. " has an intro and a "
+          .. "death line")
+    local text = (b.name .. " " .. b.intro .. " " .. b.death):lower()
+    for _, word in ipairs(banned) do
+      check(not text:find(word, 1, true),
+            b.name .. " uses no trademarked name (" .. word .. ")")
+    end
+  end
+  check(#dcc.achievement_table() <= 64, "the table fits the 64-row check")
+
+  -- The kills give XP; at XL 26 no level-up prompt can hang the script.
+  check(you.set_xl(26), "the player is set to XL 26 for the boss fights")
+  dcc.reset_achievements()
+
+  -- D:3: the intro, once, then the kill.
+  local x, y = arrive("D:3")
+  check(not dgn.mons_at(x, y).has_prop("dcc_boss_seen"),
+        "the Opening Act is not introduced before it is seen")
+  mark()
+  dcc.see_monster(x, y)
+  check(said(row["D:3"].intro), "the Announcer introduces the Opening Act "
+        .. "on first sight")
+  check(dgn.mons_at(x, y).has_prop("dcc_boss_seen"),
+        "the boss is marked as introduced")
+  mark()
+  dcc.see_monster(x, y)
+  check(said_nothing(), "a second sighting introduces nothing")
+  dcc.save_roundtrip()
+  x, y = dcc.boss_pos()
+  check(x ~= nil and dgn.mons_at(x, y).has_prop("dcc_boss_seen"),
+        "the introduced mark survives a save round trip")
+  mark()
+  dcc.see_monster(x, y)
+  check(said_nothing(), "after a save round trip a sighting introduces "
+        .. "nothing")
+
+  settle()
+  local boxes = dcc.box_count()
+  mark()
+  check(dcc.kill(x, y), "the player kills the Opening Act")
+  check(dcc.has_achievement("boss_d3"), "the kill unlocks boss_d3")
+  check(dcc.box_count() == boxes + 1, "and awards exactly one box ("
+        .. dcc.box_count() - boxes .. ")")
+  check(last_box() == "Gold", "a Gold box (" .. tostring(last_box()) .. ")")
+  check(said(row["D:3"].death), "the Announcer gives the death line")
+  check(said("Opening Night"), "and announces Opening Night")
+
+  -- Zot:5: the Legendary box.
+  x, y = arrive("Zot:5")
+  settle()
+  boxes = dcc.box_count()
+  mark()
+  check(dcc.kill(x, y), "the player kills the Series Finale")
+  check(dcc.has_achievement("boss_zot5"), "the kill unlocks boss_zot5")
+  check(dcc.box_count() == boxes + 1 and last_box() == "Legendary",
+        "and awards one Legendary box (" .. tostring(last_box()) .. ")")
+  check(said(row["Zot:5"].death), "the Announcer gives the Series Finale's "
+        .. "death line")
+
+  -- D:6: banished is no kill; nothing is paid.
+  x, y = arrive("D:6")
+  settle()
+  boxes = dcc.box_count()
+  dcc.remove_monster(x, y, "banished")
+  check(dcc.boss_count() == 0, "the Studio Enforcer is banished")
+  check(not dcc.has_achievement("boss_d6"), "a banished boss unlocks nothing")
+  check(dcc.box_count() == boxes, "and awards no box")
+
+  -- D:9: an ally's kill counts.
+  x, y = arrive("D:9")
+  settle()
+  boxes = dcc.box_count()
+  local ax, ay = killer_next_to(x, y, "orc att:friendly")
+  check(dcc.kill(x, y, ax, ay), "an ally kills the Camera Operator")
+  check(dcc.has_achievement("boss_d9"), "an ally's kill unlocks boss_d9")
+  check(dcc.box_count() == boxes + 1 and last_box() == "Platinum",
+        "and awards one Platinum box (" .. tostring(last_box()) .. ")")
+
+  -- D:12: another monster's kill pays nothing.
+  x, y = arrive("D:12")
+  settle()
+  boxes = dcc.box_count()
+  local hx, hy = killer_next_to(x, y, "orc")
+  check(dcc.kill(x, y, hx, hy), "a hostile orc kills the Season Finale")
+  check(not dcc.has_achievement("boss_d12"),
+        "a kill by another monster unlocks nothing")
+  check(dcc.box_count() == boxes, "and awards no box")
+
+  check(you.set_xl(1), "the player is back to XL 1")
+end
+phase6b()

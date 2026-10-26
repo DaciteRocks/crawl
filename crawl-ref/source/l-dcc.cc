@@ -39,6 +39,7 @@ module "dcc"
 #include "mon-util.h"
 #include "monster.h"
 #include "player.h"
+#include "player-notices.h" // seen_monster
 #include "shopping.h"
 #include "spl-util.h"
 #include "state.h"
@@ -1325,7 +1326,9 @@ LUAFN(dcc_steward_pos_lua)
 
 /*** The floor bosses (dcc_boss_table()), in floor order.
  * @treturn table an array of { place = string ("D:3"), name = string
- *   ("the Opening Act"), base = string (its monster type, "ogre") }
+ *   ("the Opening Act"), base = string (its monster type, "ogre"),
+ *   intro = string, death = string (the Announcer's lines),
+ *   achievement = string (the kill achievement's id) }
  * @function boss_floors
  */
 LUAFN(dcc_boss_floors_lua)
@@ -1342,6 +1345,12 @@ LUAFN(dcc_boss_floors_lua)
         lua_setfield(ls, -2, "name");
         lua_pushstring(ls, boss.base);
         lua_setfield(ls, -2, "base");
+        lua_pushstring(ls, boss.intro);
+        lua_setfield(ls, -2, "intro");
+        lua_pushstring(ls, boss.death);
+        lua_setfield(ls, -2, "death");
+        lua_pushstring(ls, boss.achievement);
+        lua_setfield(ls, -2, "achievement");
         lua_rawseti(ls, -2, ++i);
     }
     return 1;
@@ -1468,6 +1477,26 @@ LUAFN(dcc_fire_los_lua)
     return 0;
 }
 
+/*** The player sees the monster at (x, y), as a view update does for a
+ * monster coming into sight (seen_monster()): a hostile one not seen
+ * before gets MF_SEEN and, if it is a floor boss, the Announcer's intro
+ * (dcc_monster_seen()). Script/test only.
+ * @tparam int x
+ * @tparam int y
+ * @function see_monster
+ */
+LUAFN(dcc_see_monster_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    if (!_dcc_script_only(ls, "see_monster"))
+        return 0;
+    monster *mons = in_bounds(c) ? monster_at(c) : nullptr;
+    if (!mons)
+        return luaL_error(ls, "dcc.see_monster(): no monster there");
+    seen_monster(mons);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1546,6 +1575,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "boss_count", dcc_boss_count_lua },
 { "boss_far_percent", dcc_boss_far_percent_lua },
 { "walk_distance", dcc_walk_distance_lua },
+{ "see_monster", dcc_see_monster_lua },
 { nullptr, nullptr }
 };
 

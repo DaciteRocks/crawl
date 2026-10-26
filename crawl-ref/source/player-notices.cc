@@ -10,6 +10,7 @@
 #include "areas.h"
 #include "attitude-change.h"
 #include "database.h"
+#include "dcc-boss.h"
 #include "delay.h"
 #include "describe.h"
 #include "directn.h"
@@ -614,6 +615,8 @@ void seen_monster(monster* mons, bool do_encounter_message)
 
     // First time we've seen this particular monster.
     mons->flags |= MF_SEEN;
+    if (crawl_state.game_is_dcc())
+        dcc_monster_seen(*mons);
 
     if (do_encounter_message)
         monster_encounter_message(*mons);
