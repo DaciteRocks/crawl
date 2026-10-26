@@ -163,7 +163,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6d | Themes bite: monsters, colours, clock, quest tier | done 2026-10-25 |
 | 6e | Sponsor booth in the D:3 safe room | done 2026-10-25 |
 | 6f | Sponsor signing: join hook and Gold box | done 2026-10-25 |
-| 6g | Species re-pick core | not started |
+| 6g | Species re-pick core | done 2026-10-25 |
 | 6h | Kits | not started |
 | 6i | Live re-pick offer | not started |
 
@@ -833,7 +833,7 @@ Status: done 2026-10-25
 starting species and marks the offer pending (`dcc-repick.cc`);
 `dcc_repick_apply()` changes species with trunk's `change_species_to()`
 and spends the one-shot; script-only dlua drives it. ~7 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6h — Kits
 `docs/dcc/phases/6h-kits.md`. Three kits (steel, arcana, supplies) as item

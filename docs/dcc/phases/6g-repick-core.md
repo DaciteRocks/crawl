@@ -107,4 +107,47 @@ only), so the smoke is the check for this phase.
 - Mutations: `change_species_to` re-applies innate mutations for the new
   species up to the current XL; temporary and non-innate ones survive.
 
-Status: not started
+## As built (deviations from the text above)
+
+- The offer rolls on the first newly created Dungeon floor at depth 3 or
+  more (review fix), not only on D:3: a shaft from D:2 to D:4 would
+  otherwise skip it for good. Off the Dungeon (Lair, portals) it never
+  rolls. The smoke checks a first arrival on D:4.
+- The pool (`dcc_repick_pool()`, review fixes) is the starting species
+  minus the player's own, minus:
+  - innate casters (the Djinni): `change_species_to()` never sets up
+    their innate spells (`ng-setup.cc` `_setup_innate_spells`);
+  - the base Draconian, when the player is a Draconian of any colour;
+  - species the current god would refuse: the species half of
+    `cannot_join_god_reason()` (Demigods with any god, the undead and
+    Demonspawn with a good god, innate casters with Sif Muna, Vehumet or
+    Kikubaaqudgha).
+  Gods matter because some backgrounds start with one (Berserker/Trog,
+  Chaos Knight/Xom, Abyssal Knight/Lugonu, Cinder Acolyte/Ignis).
+- `dcc_repick_apply()` re-checks the god (the player may join one between
+  the roll and the answer): an incompatible pick is refused with an
+  Announcer line ("Legal says <god> will not have a <Species> on the
+  roster..."), and the offer stays open.
+- After a re-pick, `dcc_settle_sponsor_booth()` runs again, so a booth god
+  the new body cannot join is replaced or removed (review fix).
+- Leaving a Felid sets `you.lives = 0` (review fix). `you.deaths` and
+  `ATTR_LIFE_GAINED` are history and stay.
+- `dcc.repick(name)` tries an exact (case-insensitive) species name first,
+  then `species::from_str_loose`, so a name inside another species' name
+  cannot pick that one.
+- `dcc_repick_decline()` with no offer pending does nothing (no line, no
+  key).
+- The milestone reads "became a/an <Species>." (`article_a`).
+- Script-only test helpers beyond the text: `dcc.reset_repick()`,
+  `dcc.repick_pool()`, `dcc.repick_roll()` (`dcc_repick_roll()`, rolls a
+  fresh offer anywhere), `dcc.set_lives(n)`.
+- Smoke workaround: the headless character starts without its species'
+  innate mutations (a Human lacks explore regen), so `phase6g()` first
+  re-applies its own species with `you.change_species()`, then snapshots
+  mutations, form, HP and worn items, and restores and compares them at
+  the end.
+- Known trunk limits left as is: `change_species_to()` does not rescale
+  current HP beyond `calc_hp()`, does not change base stats, and does not
+  end a form. Becoming a Felid does not grant the starting extra life.
+
+Status: done 2026-10-25

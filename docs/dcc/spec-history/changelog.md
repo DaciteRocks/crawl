@@ -395,3 +395,20 @@ in `CLAUDE.md`). dlua `join_god` (script-only), `sponsor`, `at_booth`;
 file. Review fixes: the altar must be the joined god's (an orc's Beogh
 conversion on a booth altar signs nothing), the line capitalises "The
 Shining One", and `dcc-room.cc` shares `DCC_SPONSOR_PROP`.
+
+## 2026-10-25 — Phase 6g done
+
+Landed: the species re-pick core. `dcc-repick.cc`: the first arrival on
+a Dungeon floor at D:3 or below (`dcc_repick_arrived()` from
+`dcc_enter_floor`) rolls three species and marks the offer pending;
+`dcc_repick_apply()` runs trunk's `change_species_to()` plus the wizard
+command's invisibility fixup, the Announcer, a note, a milestone and an
+achievement check; declining keeps everything. Either spends the one-shot
+(`dcc_repicked`). No trunk hooks. dlua `repick_pending`, `repicked`;
+script-only `repick_choices`, `repick`, `repick_decline`, `reset_repick`,
+`repick_pool`, `repick_roll`, `set_lives`. Review fixes: roll below D:3
+too (a shaft past it), a pool that leaves out the Djinni, the base
+Draconian for a Draconian and species the current god refuses (re-checked
+on apply), a booth re-settle after a re-pick, and no Felid lives after
+leaving the Felid body. Deviations and the trunk limits left as is are in
+the phase file.

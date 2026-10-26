@@ -1868,6 +1868,50 @@ LUAFN(dcc_reset_repick_lua)
     return 0;
 }
 
+/*** The species an offer may hold now (dcc_repick_pool()). Script/test
+ * only.
+ * @treturn table array of species names
+ * @function repick_pool
+ */
+LUAFN(dcc_repick_pool_lua)
+{
+    if (!_dcc_script_only(ls, "repick_pool"))
+        return 0;
+    lua_newtable(ls);
+    int i = 0;
+    for (species_type sp : dcc_repick_pool())
+    {
+        lua_pushstring(ls, species::name(sp).c_str());
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
+/*** Roll a fresh pending offer wherever the player is (dcc_repick_roll()),
+ * replacing any pending one. Script/test only.
+ * @function repick_roll
+ */
+LUAFN(dcc_repick_roll_lua)
+{
+    if (!_dcc_script_only(ls, "repick_roll"))
+        return 0;
+    dcc_repick_roll();
+    return 0;
+}
+
+/*** Set the player's extra lives (a Felid's). Script/test only.
+ * @tparam int lives
+ * @function set_lives
+ */
+LUAFN(dcc_set_lives_lua)
+{
+    const int lives = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "set_lives"))
+        return 0;
+    you.lives = max(0, lives);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1967,6 +2011,9 @@ static const struct luaL_Reg dcc_dlib[] =
 { "repick", dcc_repick_lua },
 { "repick_decline", dcc_repick_decline_lua },
 { "reset_repick", dcc_reset_repick_lua },
+{ "repick_pool", dcc_repick_pool_lua },
+{ "repick_roll", dcc_repick_roll_lua },
+{ "set_lives", dcc_set_lives_lua },
 { nullptr, nullptr }
 };
 
