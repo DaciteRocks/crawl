@@ -118,6 +118,9 @@
     <ClCompile Include="..\dcc-safe.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc-sponsor.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\dcc-theme.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1183,6 +1186,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-safe.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc-sponsor.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-theme.h">

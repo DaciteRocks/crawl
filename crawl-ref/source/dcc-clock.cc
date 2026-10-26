@@ -24,6 +24,7 @@
 #include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
 #include "dcc-room.h" // dcc_settle_sponsor_booth
+#include "dcc-sponsor.h" // dcc_sponsor_intro
 #include "dcc-theme.h" // dcc_announce_theme, dcc_theme_for, ...
 #include "message.h"
 #include "notes.h"
@@ -305,7 +306,8 @@ static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
  * The player has arrived on a level (files.cc load_level(), whenever the
  * arrival makes changes): run the floor clock's arrival logic, settle the
  * fetch quest of the floor left behind when this is a new floor, settle a
- * new floor's sponsor booth (dcc_settle_sponsor_booth()), announce
+ * new floor's sponsor booth (dcc_settle_sponsor_booth()) and name its
+ * sponsors (dcc_sponsor_intro()), announce
  * a new connected floor's theme (dcc_announce_theme()), place the theme's
  * extra monsters (dcc_apply_theme_arrival()) and the floor's boss
  * if it has one (dcc_place_boss()), then check
@@ -337,6 +339,7 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
     if (just_created && is_connected_branch(here))
     {
         dcc_settle_sponsor_booth();
+        dcc_sponsor_intro();
         dcc_announce_theme();
         dcc_apply_theme_arrival();
         dcc_place_boss();

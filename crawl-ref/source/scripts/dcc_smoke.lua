@@ -2522,3 +2522,145 @@ local function phase6e()
   end
 end
 phase6e()
+
+-- Phase 6f: signing with a sponsor. The Announcer names the booth's gods on
+-- the first arrival at D:3; joining one of them on its booth altar pays one
+-- Gold box, once per game. Joining anywhere else pays nothing extra.
+local function phase6f()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local function count_tier(tier)
+    local n = 0
+    for _, t in ipairs(dcc.boxes()) do
+      if t == tier then n = n + 1 end
+    end
+    return n
+  end
+  local function build(place)
+    debug.goto_place(place)
+    test.regenerate_level()
+  end
+  if you.race() == "Demigod" then
+    print("dcc_smoke: the player is a Demigod; sponsor signing skipped")
+    return
+  end
+
+  local before = you.god()
+  local function restore()
+    dcc.set_god(before == "No God" and "" or before)
+  end
+  dcc.set_god("")
+  dcc.reset_achievements()
+
+  build("D:3")
+  mark()
+  dcc.enter_floor(true)
+  local altars = dcc.sponsor_altars()
+  check(#altars == 3, "D:3's booth holds three altars (" .. #altars .. ")")
+  local names = altars[1].god .. ", " .. altars[2].god .. " and "
+                .. altars[3].god
+  check(said("Three sponsors have booths on this floor: " .. names .. "."),
+        "the Announcer names the three sponsors on arrival (" .. names
+        .. ")")
+  check(dcc.sponsor() == nil, "no sponsor before a signing")
+
+  -- Signing at the first altar.
+  check(not dcc.at_booth(), "the arrival spot is not a booth altar")
+  you.moveto(altars[1].x, altars[1].y)
+  check(dcc.at_booth(), "the player stands on the " .. altars[1].god
+        .. " booth altar")
+  check(not dcc.has_achievement("signed"), "signed is not yet unlocked")
+  local boxes, golds = dcc.box_count(), count_tier("Gold")
+  mark()
+  dcc.join_god(altars[1].god)
+  check(you.god() == altars[1].god, "the player joined " .. altars[1].god
+        .. " (" .. you.god() .. ")")
+  check(said("signed you"), "the Announcer announces the deal")
+  check(count_tier("Gold") == golds + 1, "the signing pays one Gold box")
+  check(dcc.has_achievement("signed"), "signed unlocks at once")
+  check(dcc.box_count() == boxes + 2,
+        "the Gold box and signed's Bronze box, nothing else ("
+        .. dcc.box_count() - boxes .. " new)")
+  check(dcc.sponsor() == altars[1].god, "dcc.sponsor() names "
+        .. altars[1].god)
+
+  -- A second booth god pays nothing. (Leaving the first god by hand keeps
+  -- the smoke clear of excommunication and wrath.)
+  dcc.set_god("")
+  you.moveto(altars[2].x, altars[2].y)
+  check(dcc.at_booth(), "the player stands on the " .. altars[2].god
+        .. " booth altar")
+  boxes = dcc.box_count()
+  mark()
+  dcc.join_god(altars[2].god)
+  check(you.god() == altars[2].god, "the player joined " .. altars[2].god)
+  check(dcc.box_count() == boxes, "a second booth signing pays no box")
+  check(not said("signed you"), "and the Announcer says nothing of a deal")
+  check(dcc.sponsor() == altars[1].god, "the sponsor is still "
+        .. altars[1].god)
+
+  -- Off the booth: a fresh game's state, a floor cell outside the room.
+  dcc.set_god("")
+  dcc.reset_achievements()
+  check(dcc.sponsor() == nil, "reset_achievements forgets the sponsor")
+  local ox, oy
+  for y = 1, dgn.GYM - 2 do
+    for x = 1, dgn.GXM - 2 do
+      if not ox and dgn.feature_name(dgn.grid(x, y)) == "floor"
+         and not dcc.is_safe_cell(x, y) and dgn.mons_at(x, y) == nil then
+        ox, oy = x, y
+      end
+    end
+  end
+  check(ox ~= nil, "a floor cell outside the room")
+  you.moveto(ox, oy)
+  check(not dcc.at_booth(), "a floor cell outside the room is no booth")
+  mark()
+  dcc.join_god("Xom")
+  check(you.god() == "Xom", "the player joined Xom off the booth")
+  check(count_tier("Gold") == 0 and dcc.box_count() == 1,
+        "joining off the booth pays only signed's box ("
+        .. dcc.box_count() .. ")")
+  check(dcc.has_achievement("signed"), "signed unlocks off the booth too")
+  check(dcc.sponsor() == nil and not said("signed you"),
+        "joining off the booth is no signing")
+
+  -- The signing survives a save.
+  dcc.set_god("")
+  dcc.reset_achievements()
+  you.moveto(altars[3].x, altars[3].y)
+  dcc.join_god(altars[3].god)
+  check(dcc.sponsor() == altars[3].god, "signed with " .. altars[3].god)
+  dcc.save_roundtrip()
+  check(dcc.sponsor() == altars[3].god, "the sponsor survives a save "
+        .. "round trip")
+
+  -- With no altar left in the booth the sponsors pass.
+  build("D:3")
+  for _, a in ipairs(dcc.sponsor_altars()) do
+    dgn.grid(a.x, a.y, dgn.find_feature_number("floor"))
+  end
+  mark()
+  dcc.enter_floor(true)
+  check(said("The sponsors looked at your file and passed."),
+        "an empty booth: the Announcer says the sponsors passed")
+
+  -- No sponsor line off D:3.
+  build("D:4")
+  mark()
+  dcc.enter_floor(true)
+  -- (The lightning theme's blurb mentions "the sponsors"; the intro's own
+  -- phrases are what must be missing.)
+  check(not said("have booths on this floor")
+        and not said("has a booth on this floor")
+        and not said("sponsors looked at your file"),
+        "the Announcer names no sponsors on D:4")
+
+  dcc.reset_achievements()
+  restore()
+  check(you.god() == before, "the player's god is restored (" .. you.god()
+        .. ")")
+  debug.goto_place("D:1")
+end
+phase6f()

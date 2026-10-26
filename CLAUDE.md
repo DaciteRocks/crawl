@@ -128,6 +128,11 @@ visibly DCC-only. Recorded exceptions:
   switch in `items.cc` (plus the `#include "dcc-boxes.h"` it needs), so a
   box item's description says it was won from a loot box. `AQ_DCC_BOX`
   items exist only in DCC games, so the case needs no guard.
+- Phase 6f (sponsor signing) adds one guarded call as the last statement
+  of `join_religion()` in `religion.cc`, `if (crawl_state.game_is_dcc())
+  dcc_god_joined(which_god);` (plus `#include "dcc-sponsor.h"`), so
+  joining a god on a D:3 booth altar pays the sponsor's Gold box and
+  `signed` unlocks at once.
 - Phase 6b (boss intro) adds one guarded call in `player-notices.cc`
   `seen_monster()`, right after `mons->flags |= MF_SEEN;`: `if
   (crawl_state.game_is_dcc()) dcc_monster_seen(*mons);` (plus `#include

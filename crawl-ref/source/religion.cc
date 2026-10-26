@@ -25,6 +25,7 @@
 #include "coordit.h"
 #include "dactions.h"
 #include "database.h"
+#include "dcc-sponsor.h"
 #include "decks.h"
 #include "delay.h"
 #include "describe-god.h"
@@ -3990,6 +3991,8 @@ void join_religion(god_type which_god)
 #endif
 
     learned_something_new(HINT_CONVERT);
+    if (crawl_state.game_is_dcc())
+        dcc_god_joined(which_god);
 }
 
 void god_pitch(god_type which_god)

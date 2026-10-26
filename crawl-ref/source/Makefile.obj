@@ -45,6 +45,7 @@ dcc-clock.o \
 dcc-quest.o \
 dcc-room.o \
 dcc-safe.o \
+dcc-sponsor.o \
 dcc-theme.o \
 death-curse.o \
 decks.o \
@@ -391,6 +392,7 @@ dcc-clock.h.o \
 dcc-quest.h.o \
 dcc-room.h.o \
 dcc-safe.h.o \
+dcc-sponsor.h.o \
 dcc-theme.h.o \
 death-curse.h.o \
 debug-defines.h.o \
