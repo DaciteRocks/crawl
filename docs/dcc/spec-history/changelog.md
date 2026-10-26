@@ -258,3 +258,18 @@ Reviewers changed:
 - smoke: the survive boundary really checks 1499 aut (not done) and 1500
   (done); a banished and a reset goblin lower and then complete a kill
   quest.
+
+## 2026-10-25 — Phase 5b done
+
+Landed: every safe room holds the Floor Steward (good neutral human,
+`dcc_steward` prop via `MonPropsMarker`), which keeps its post and gives
+no XP. Its `function_in_los` marker notes the offer; the new guarded
+`main.cc` `_input()` hook asks before the next command. Accepting starts
+the 5a quest marker; declining leaves no quest; killing the steward voids
+it. Scripts initialise new levels' markers (`dcc.init_markers()`), and the
+5a smoke accepts its quests. Deviations are in the Phase 5b text.
+Reviewers changed:
+- only an explicit y or n settles the offer; Escape, Enter, space or a
+  hangup puts it off until the steward is next in sight (smoke-checked);
+- no offer while keys are queued (macro, sendkeys, repeat, replay);
+- comments now say trunk's kill list still records the steward.

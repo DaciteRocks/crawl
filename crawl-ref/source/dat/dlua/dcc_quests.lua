@@ -14,7 +14,8 @@
 -- and has control (dcc-quest.cc dcc_quest_before_command()), the Announcer
 -- introduces it, states the quest, and asks (dcc_quest_offer()).
 -- Accepting starts the marker's listeners; declining leaves the floor with
--- no quest; either way the offer is made once. Killing the steward voids
+-- no quest; either answer is final. Putting the question off (Escape)
+-- leaves it open until the steward is next seen. Killing the steward voids
 -- the quest (dcc_quest_steward_died()). A floor whose room has no steward
 -- gets its quest active at once.
 --
@@ -38,8 +39,9 @@
 --           below half; dropping below half starts the count over
 --           (DET_TURN_ELAPSED)
 --
--- Offer fields of a quest's state: offered (asked, or active without a
--- steward), accepted, declined, voided (the steward died first). Only an
+-- Offer fields of a quest's state: introduced (the steward has been
+-- introduced), offered (answered y or n, or active without a steward),
+-- accepted, declined, voided (the steward died first). Only an
 -- accepted quest that is not done, expired or voided is live.
 --
 -- State: dgn.persist.dcc_quests[place], place being the floor's
@@ -457,24 +459,35 @@ function dcc_quest_setup(e, forced_kind)
   end
 end
 
--- The Floor Steward's offer of the current floor's quest, made once: the
--- Announcer introduces the steward and states the quest, then asks.
--- answer true or false skips the question (scripts); nil asks with
--- crawl.yesno (dcc-quest.cc dcc_quest_before_command() calls it so).
--- Returns whether the quest was accepted.
+-- The Floor Steward's offer of the current floor's quest: the Announcer
+-- introduces the steward (the first time) and states the quest, then
+-- asks. answer true or false skips the question (scripts); nil asks
+-- (dcc-quest.cc dcc_quest_before_command() calls it so). Only a real y or
+-- n settles it, once: an answer put off (Escape and the like; headless, an
+-- unforced one) leaves the offer open, to be made again the next time the
+-- steward comes into sight. Returns whether the quest was accepted.
 function dcc_quest_offer(place, answer)
   local q = dcc_quest_state_at(place)
   if not q or q.offered or q.voided or q.done or q.expired
      or place ~= you.where() then
     return false
   end
-  q.offered = true
-  dcc.announce("Say hello to the Floor Steward, our friendly quest giver."
-               .. " This floor's quest, if you want it:")
+  if q.introduced then
+    dcc.announce("The Floor Steward's offer still stands.")
+  else
+    q.introduced = true
+    dcc.announce("Say hello to the Floor Steward, our friendly quest giver."
+                 .. " This floor's quest, if you want it:")
+  end
   dcc.announce(q.text)
   if answer == nil then
-    answer = crawl.yesno("Accept the Floor Steward's quest?", true, "n")
+    answer = dcc.ask_offer("Accept the Floor Steward's quest?")
   end
+  if answer == nil then
+    dcc.announce("Think it over. The Floor Steward isn't going anywhere.")
+    return false
+  end
+  q.offered = true
   if answer then
     accept_quest(q, place, false)
   else
@@ -482,7 +495,7 @@ function dcc_quest_offer(place, answer)
     dcc.announce("Quest declined. The Floor Steward shrugs; no quest for"
                  .. " you on this floor.")
   end
-  return answer and true or false
+  return answer
 end
 
 -- A floor's Floor Steward died (dcc-quest.cc dcc_steward_died(), for any
@@ -532,6 +545,8 @@ function dcc_quest_debug()
     -- The steward's offer with a forced answer (no question asked).
     accept = function() return dcc_quest_offer(place, true) end,
     decline = function() return dcc_quest_offer(place, false) end,
+    -- The offer as the main loop makes it; headless, it is put off.
+    offer = function() return dcc_quest_offer(place) end,
     -- Is the quest accepted and still being tracked?
     active = function() return live(dcc_quest_state_at(place)) end,
   }

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "dcc-achieve.h" // dcc_box_tier
+#include "maybe-bool.h"
 #include "monster-type.h"
 
 class monster;
@@ -45,5 +46,6 @@ monster *dcc_prepare_steward();
 bool dcc_is_steward(const monster &mons);
 void dcc_steward_seen();
 string dcc_take_pending_offer();
+maybe_bool dcc_ask_quest_offer(const string &question);
 void dcc_quest_before_command();
 void dcc_steward_died(const monster &mons);

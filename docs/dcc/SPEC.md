@@ -125,7 +125,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 4a | Achievement table, hooks, Announcer lines | done 2026-10-25 |
 | 4b | Loot boxes and the kiosk | done 2026-10-25 |
 | 5a | Quest engine (Lua, four objective kinds) | done 2026-10-25 |
-| 5b | Quest giver NPC and offer flow | not started |
+| 5b | Quest giver NPC and offer flow | done 2026-10-25 |
 | 6a | Floor bosses | not started |
 | 6b | Floor themes | not started |
 | 6c | Sponsors (built on gods) | not started |
@@ -710,7 +710,26 @@ room; if so use a stationary flag via `mons_prop`/`MonPropsMarker` or
 `att:fellow_slime`-style non-following attitude. Players can attack the NPC;
 that is allowed (void the quest, no other penalty).
 
-Status: not started
+As built (deviations from the text above):
+- The player cannot actually kill the steward: it never leaves its cell
+  (`dcc_monster_barred_from()`), and the no-combat rule (Resolved decision
+  9) protects everything on a safe cell. Any death still voids the quest
+  (checked with a script kill). It gives no XP (`MF_NO_REWARD`) and no
+  achievement or quest credit, but trunk's kill list still records it.
+- The offer is asked from the main loop: the `function_in_los` marker
+  fires inside the view update, so it only notes the offer, and a new
+  guarded `main.cc` `_input()` hook (`dcc_quest_before_command()`, see
+  `CLAUDE.md`) asks before the next command, not during delays or while
+  keys are queued. Only y or n settles it; Escape, Enter, space or a
+  hangup puts it off until the steward is next seen.
+- A declined fetch quest's item stays on the floor (accepting is still
+  strictly better: it adds a box).
+- A floor whose room has no steward gets its quest active at once.
+- No description text for the renamed monster (`monsters.txt` is a trunk
+  file).
+- The live prompt still needs one manual check on D:2.
+
+Status: done 2026-10-25
 
 ---
 

@@ -464,8 +464,10 @@ void dcc_monster_killed(const monster &mons, killer_type killer,
 {
     if (!crawl_state.game_is_dcc())
         return;
-    // The Floor Steward is no kill, however it died: it voids its floor's
-    // quest instead.
+    // The Floor Steward, however it died, earns no achievement or quest
+    // credit (and, MF_NO_REWARD, no XP); it voids its floor's quest
+    // instead. Trunk's kill list (you.kills) still records it: that ran
+    // earlier in monster_die().
     if (dcc_is_steward(mons))
     {
         dcc_steward_died(mons);
