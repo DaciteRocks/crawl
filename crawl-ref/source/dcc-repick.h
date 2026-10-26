@@ -29,3 +29,21 @@ bool dcc_repick_pending();
 vector<species_type> dcc_repick_choices();
 bool dcc_repick_apply(species_type sp);
 void dcc_repick_decline();
+
+// Kits (Phase 6h): they stand in for a class change (jobs cannot change in
+// DCSS). One per game, given as part of an accepted re-roll (Phase 6i).
+// String: the kit id given. Its presence is the one-shot.
+#define DCC_KIT_KEY "dcc_kit"
+
+/// A kit: a few des ITEM: specs, dropped at the player's feet.
+struct dcc_kit
+{
+    const char *id;
+    const char *name;
+    const char *blurb;
+    vector<const char *> items;
+};
+
+const vector<dcc_kit> &dcc_kit_table();
+const dcc_kit *dcc_find_kit(const string &id);
+bool dcc_give_kit(const string &id, bool force = false);

@@ -2941,3 +2941,118 @@ local function phase6g()
   debug.goto_place("D:1")
 end
 phase6g()
+
+-- Phase 6h: kits, dropped at the player's feet, one per game.
+local function phase6h()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  -- A plain floor cell outside the safe room with nothing on or around it.
+  local function bare_outside_cell()
+    for y = 2, dgn.GYM - 3 do
+      for x = 2, dgn.GXM - 3 do
+        local ok = dgn.feature_name(dgn.grid(x, y)) == "floor"
+                   and not dcc.is_safe_cell(x, y) and dgn.mons_at(x, y) == nil
+        for dy = -1, 1 do
+          for dx = -1, 1 do
+            ok = ok and #dgn.items_at(x + dx, y + dy) == 0
+          end
+        end
+        if ok then return x, y end
+      end
+    end
+  end
+  local function items_around(x, y)
+    local n = 0
+    for dy = -1, 1 do
+      for dx = -1, 1 do
+        n = n + #dgn.items_at(x + dx, y + dy)
+      end
+    end
+    return n
+  end
+
+  check(dcc.kit() == nil, "no kit given before Phase 6h's checks")
+  local kits = dcc.kits()
+  check(#kits == 3, "three kits (" .. #kits .. ")")
+  local ids = {}
+  for _, k in ipairs(kits) do
+    ids[#ids + 1] = k.id
+    check(k.valid, "every item spec of the " .. k.id .. " kit parses ("
+          .. table.concat(k.items, "; ") .. ")")
+    check(#k.items >= 3 and #k.items <= 5,
+          "the " .. k.id .. " kit has 3 to 5 lines (" .. #k.items .. ")")
+    check(k.name ~= "" and k.blurb ~= "", "the " .. k.id
+          .. " kit has a name and a blurb")
+  end
+  check(table.concat(ids, ",") == "steel,arcana,supplies",
+        "the kits are steel, arcana and supplies (" .. table.concat(ids, ",")
+        .. ")")
+
+  -- A cluttered level jams the delivery instead of culling items, and the
+  -- jam does not spend the game's one kit.
+  debug.goto_place("D:2")
+  test.regenerate_level()
+  local x, y = bare_outside_cell()
+  check(x ~= nil, "a bare floor cell outside the safe room on D:2")
+  you.moveto(x, y)
+  while dcc.free_item_slots() > 2 do
+    dgn.create_item(x, y, "dagger")
+  end
+  local free = dcc.free_item_slots()
+  mark()
+  check(not dcc.give_kit("steel"), "a full item table jams the kit")
+  check(said("stuck in the chute"), "the Announcer explains the jam")
+  check(not said("Kit delivered"), "and delivers nothing")
+  check(dcc.free_item_slots() == free, "the jam adds and culls no item")
+  check(dcc.kit() == nil, "the jam does not spend the one kit")
+
+  test.regenerate_level()
+  x, y = bare_outside_cell()
+  check(x ~= nil, "a bare floor cell outside the safe room on D:2")
+  you.moveto(x, y)
+
+  local first = true
+  local last
+  for _, k in ipairs(kits) do
+    local before = items_around(x, y)
+    mark()
+    -- The first kit is the game's one: no force needed.
+    check(dcc.give_kit(k.id, not first), "the " .. k.id .. " kit is given")
+    first = false
+    check(said("Kit delivered: " .. k.name), "the Announcer delivers the "
+          .. k.name .. " kit")
+    local after = items_around(x, y)
+    check(after >= before + #k.items - 1, "the " .. k.id .. " kit's items "
+          .. "land at the player's feet (" .. before .. " -> " .. after .. ")")
+    check(#dgn.items_at(x, y) >= 1, "and on the player's own cell")
+    check(dcc.kit() == k.id, "dcc.kit() is " .. k.id)
+    last = k.id
+  end
+  check(#dgn.items_at(x, y) == items_around(x, y),
+        "a kit on plain floor lands on the player's own cell")
+  local names = {}
+  for _, it in ipairs(dgn.items_at(x, y)) do
+    names[#names + 1] = it.name()
+  end
+  local all = table.concat(names, "; ")
+  -- Unidentified jewellery and consumables show only their looks.
+  check(all:find("long sword", 1, true) and all:find("kite shield", 1, true)
+        and all:find("book of Flames", 1, true)
+        and all:find("robe", 1, true) and all:find("ring", 1, true),
+        "the kits hold what the table says (" .. all .. ")")
+
+  local level_items = items_around(x, y)
+  mark()
+  check(not dcc.give_kit("steel"), "a second kit, unforced, is refused")
+  check(not dcc.give_kit("nope", true), "an unknown kit id is refused")
+  check(items_around(x, y) == level_items and dcc.kit() == last,
+        "a refused kit drops nothing and keeps the given one")
+  check(not said("Kit delivered"), "a refused kit says nothing")
+  dcc.save_roundtrip()
+  check(dcc.kit() == last, "the given kit survives a save round trip")
+
+  test.regenerate_level()
+  debug.goto_place("D:1")
+end
+phase6h()
