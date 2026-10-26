@@ -273,3 +273,29 @@ Reviewers changed:
   hangup puts it off until the steward is next in sight (smoke-checked);
 - no offer while keys are queued (macro, sendkeys, repeat, replay);
 - comments now say trunk's kill list still records the steward.
+
+## 2026-10-25 — Phase 6 planned (spec-architect)
+
+The coarse Phases 6a–6d (bosses, themes, sponsors, re-pick) are replaced
+by nine sized phases 6a–6i, each in its own file under `docs/dcc/phases/`
+(SPEC.md keeps a one-paragraph entry and the Status per phase). Split on
+"build the thing, then wire it to the player": bosses → 6a placement, 6b
+intro/kill/box; themes → 6c assignment and blurb, 6d effects; sponsors →
+6e booth, 6f join hook and box; re-pick → 6g core, 6h kits, 6i live offer.
+Architect decisions added to SPEC.md's Decisions (Phase 6 block):
+- bosses are placed monsters (a `mons_spec` table, prop `dcc_boss`), not
+  vaults, because Zot:5 and the encompass branch ends cannot take a
+  secondary vault; a boss never blocks the stairs;
+- themes are a C++ table using only exported trunk levers
+  (`set_vault_mon_list`, `env.floor_colour`/`rock_colour`, `mons_place`, the
+  clock tunable, the quest band); no layout hook;
+- sponsors are altars of three distinct joinable temple gods in a
+  D:3-only safe-room variant; the booth bonus is one Gold box, once;
+- the re-roll is one bundle (species, then kit), kits are item specs
+  dropped at the player's feet, and the `main.cc` hook becomes
+  `dcc_before_command()` running both offers.
+New trunk hooks planned (one guarded line each): `player-notices.cc`
+`seen_monster()` (6b), `religion.cc` `join_religion()` (6f), and the
+renamed `main.cc` call (6i). Nine open questions with defaults are listed
+in SPEC.md under "Open questions for Phase 6"; phases proceed under the
+defaults.

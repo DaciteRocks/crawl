@@ -97,6 +97,37 @@ Architecture
   one quest when first seen. Accepting is optional; rewards are boxes.
 - **Reuse the Descent startup tile** (`TILEG_STARTUP_IRONSOUP`). No new art.
 
+Phase 6 (architect, 2026-10-25; each phase file restates what it needs)
+- **Bosses are placed monsters, not vaults.** A C++ table in `dcc-boss.cc`
+  maps a floor (D:3, D:6, D:9, D:12, Zot:5) to a des monster spec; the boss
+  is placed on first arrival at a far reachable cell and carries the monster
+  prop `dcc_boss`. Reason: Zot:5, Vaults:$ and the Hell ends are encompass
+  maps where no secondary vault fits; a monster at a far cell never fails.
+  A boss never blocks the way down; its reward is the kill achievement's
+  box (Gold, Gold, Platinum, Platinum, Legendary by floor) and its drops.
+- **Themes are data in C++**, one table row each in `dcc-theme.cc` (id,
+  name, blurb, random-monster list spec, floor and rock colours, clock
+  percent, quest tier bump, extra monsters), four rows, chosen at build
+  time with the builder's RNG, stored in `you.props["dcc_themes"]`. The
+  levers are existing exported trunk functions only (`set_vault_mon_list`,
+  `env.floor_colour`/`env.rock_colour`, `mons_place`, the clock tunable, the
+  quest band). No layout changes: that needs a hook in `_pick_layout` for
+  no visible return. D:1 has no theme; consecutive floors never repeat.
+- **Sponsors are altars** of three distinct temple gods inside a D:3-only
+  safe-room variant, chosen at build time from `temple_god_list()` minus
+  the player's current god and gods they cannot join. Gods keep their DCSS
+  names and rules; the booth bonus is one Gold box, once, for joining from
+  a booth altar (plus the existing `signed` achievement).
+- **The re-roll is one bundle.** First arrival on D:3 offers three random
+  starting species; accepting applies `change_species_to()` and then gives
+  one of three kits; declining keeps everything and gets no kit. Kits are
+  item specs dropped at the player's feet (`dgn_place_multiple_items`),
+  never written into the pack.
+- **Prompts are asked from the main loop.** The `main.cc` `_input()` hook
+  becomes `dcc_before_command()` (in `dcc.cc`), which runs the re-pick
+  offer and then the quest offer, both refusing while keys are queued or
+  the player is running or delayed, exactly as Phase 5b's offer does.
+
 Standard gate (every phase; run from Git Bash; all must exit 0)
 The repo-root `CLAUDE.md` holds the authoritative copy of this gate (Phase 0
 verified it); if the two differ, `CLAUDE.md` wins.
@@ -126,14 +157,26 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 4b | Loot boxes and the kiosk | done 2026-10-25 |
 | 5a | Quest engine (Lua, four objective kinds) | done 2026-10-25 |
 | 5b | Quest giver NPC and offer flow | done 2026-10-25 |
-| 6a | Floor bosses | not started |
-| 6b | Floor themes | not started |
-| 6c | Sponsors (built on gods) | not started |
-| 6d | Floor-3 species re-pick and kits | not started |
+| 6a | Boss placement | not started |
+| 6b | Boss intro, kill achievement and box | not started |
+| 6c | Theme assignment and Announcer blurb | not started |
+| 6d | Themes bite: monsters, colours, clock, quest tier | not started |
+| 6e | Sponsor booth in the D:3 safe room | not started |
+| 6f | Sponsor signing: join hook and Gold box | not started |
+| 6g | Species re-pick core | not started |
+| 6h | Kits | not started |
+| 6i | Live re-pick offer | not started |
 
 Phases 1, 2, 3, 4 were each split from one agreed feature into two commits
 because the first half changes trunk plumbing and the second adds the new
-module; they have different risk profiles.
+module; they have different risk profiles. The former coarse Phases 6a–6d
+(bosses, themes, sponsors, re-pick) were split 2026-10-25 into 6a–6i on the
+same principle: build the thing, then wire it to the player. Their bodies
+live in `docs/dcc/phases/`; an implementer reads the Goal, the Decisions and
+its one phase file.
+
+Optional Debug Console `-test` run (see `CLAUDE.md`): after 6b, 6d, 6f and
+6i.
 
 ---
 
@@ -733,111 +776,75 @@ Status: done 2026-10-25
 
 ---
 
-## Phase 6a — Floor bosses
+## Phase 6 — bosses, themes, sponsors, re-pick (bodies in `docs/dcc/phases/`)
 
-Scope. On D:3, D:6, D:9, D:12 and Zot:5 a boss vault (tag `dcc_boss
-dcc_only`, one per depth band, placed like the safe room but far from it)
-spawns a buffed named monster (des `MONS:` with `hd:`/`hp:`/`name:` and a
-`MonPropsMarker` prop `dcc_boss`). Announcer introduces it on first LOS;
-killing it unlocks `boss_<depth>` (Gold → Legendary by depth) via the 4a kill
-hook reading the prop. Produces `source/dat/des/dcc/bosses.des`, a
-`_place_dcc_boss()` call in `dungeon.cc` beside the safe-room call, kill-hook
-extension in `dcc-achieve.cc`, smoke checks.
+Each phase below is self-contained in its file: Scope, Budget, Details,
+Gate, Verification, Risks and a Status line. The implementer reads the
+Goal, the Decisions (including the Phase 6 block) and that one file. The
+Status in the file is authoritative; mirror it in the Phase list table
+above when it changes. Order is the list order; no phase depends on a
+later one, and 6c–6d, 6e–6f and 6g–6i each depend only on their
+predecessor in the pair or triple.
 
-Budget: ~5 files touched; read `dat/des/builder/uniques.des` header and one
-`MONS:` example with `name:`/`hd:` syntax in `syntax.txt` (~760–900).
-
-Gate: Standard gate (smoke: D:3 as DCC → a monster with prop `dcc_boss`
-exists; D:2 → none).
-
-Verification: reach D:3, meet the boss, kill it, get the Announcer line and
-box.
-
-Risks. Boss strength tuning is play-tested, not scripted; start at 1.5x HD
-of the depth's top monster and leave a `dcc_boss_hd_mult` constant.
-
+### Phase 6a — Boss placement
+`docs/dcc/phases/6a-boss-placement.md`. A named, buffed monster with the
+`dcc_boss` prop is placed far from the safe room on first arrival at D:3,
+D:6, D:9, D:12 and Zot:5 (`dcc-boss.cc`, called from `dcc_enter_floor`);
+kill quests never target it. ~8 files.
 Status: not started
 
----
-
-## Phase 6b — Floor themes
-
-Scope. Each DCC floor announces a theme on entry and biases generation: a
-small table in `dcc.cc` maps depth → theme id → (layout tag preference,
-monster-set tweak via `dgn.set_random_mon_list`, Announcer blurb). Implemented
-as a Lua prelude in `source/dat/des/dcc/themes.des` (one `NAME: dcc_theme_*`
-map per theme with `TAGS: dcc_only layout` style hooks, following
-`dat/des/builder/layout*.des` patterns) plus `dcc_enter_floor` reading the
-theme for the blurb. Keep to 4 themes.
-
-Budget: ~4 files touched; read `dat/des/builder/layout.des` header,
-`l-dgn.cc` `set_random_mon_list`.
-
-Gate: Standard gate (smoke: `dcc.theme_for("D:5")` returns one of the four
-ids deterministically for a seeded game).
-
-Verification: floor entry shows "Theme: ..." and monsters match.
-
-Risks. Layout tags are weighted globally; a DCC-only layout must not leak
-into normal games — `dcc_only` tag check from 3b covers vault selection;
-confirm it also covers layouts (same `maps.cc` path).
-
+### Phase 6b — Boss intro, kill achievement and box
+`docs/dcc/phases/6b-boss-intro-kill.md`. The Announcer introduces a boss on
+first sight (one guarded hook in `player-notices.cc` `seen_monster()`) and
+a counted kill unlocks `boss_<floor>` (five new achievement rows, Gold to
+Legendary). ~7 files.
 Status: not started
 
----
-
-## Phase 6c — Sponsors (built on gods)
-
-Scope. The D:3 safe room contains a "sponsor booth": three random altars
-(reusing the overflow-temple altar picker, `ng-init.cc` `initialise_temples`
-pattern) tagged so Descent's no-temple rule still holds elsewhere. Joining a
-god from the booth awards a Gold box and the `signed` achievement; the
-Announcer frames gods as sponsors in its lines only (gods keep their DCSS
-names). Produces a `safe_rooms.des` variant for D:3 (or a `SUBST` on the
-depth), a small `dcc-sponsor.cc` or additions to `dcc.cc` hooking
-`god_pitch`/join (find the single join point in `religion.cc`,
-`join_religion`), smoke checks.
-
-Budget: ~5 files touched; read `ng-init.cc` 60–140, `religion.cc`
-`join_religion`.
-
-Gate: Standard gate (smoke: D:3 as DCC has ≥ 3 altar features inside safe
-cells).
-
-Verification: reach D:3, pick a god at the booth, get the box.
-
-Risks. Descent disables the temple; altars still generate elsewhere via
-overflow temples — fine, the booth is additive.
-
+### Phase 6c — Theme assignment and Announcer blurb
+`docs/dcc/phases/6c-theme-assignment.md`. Four themes as a C++ table
+(`dcc-theme.cc`); every connected floor after D:1 is assigned one at
+build time (from `dcc_place_safe_room`), stored in `you.props`, announced
+on first arrival and shown in the clock summary. ~8 files.
 Status: not started
 
----
+### Phase 6d — Themes bite: monsters, colours, clock, quest tier
+`docs/dcc/phases/6d-themes-bite.md`. The theme sets the level's random
+monster list (`set_vault_mon_list`), floor and rock colours, extra
+monsters on arrival, the clock percent (`dcc_floor_turns_for`) and the
+quest band tier (`dcc_quests.lua`). ~5 files.
+Status: not started
 
-## Phase 6d — Floor-3 species re-pick and kits
+### Phase 6e — Sponsor booth in the D:3 safe room
+`docs/dcc/phases/6e-sponsor-booth.md`. Four larger safe-room variants
+tagged `dcc_sponsor_room` with three booth cells, used on D:3 only;
+`dcc-room.cc` fills them with altars of three distinct joinable temple
+gods at build time. ~5 files.
+Status: not started
 
-Scope. On first arrival at D:3 the Announcer offers a one-time
-"re-roll": a menu of three random playable species (excluding the current
-one) applied with `change_species_to()` (`species.h:103`), plus a kit pick
-from a small table (3 starting-kit bundles: weapon+armour, spellbook+robe,
-consumables; granted via `acquirement_create_item`/`items`). Declining keeps
-everything. Jobs cannot change in DCSS; kits are the substitute. Produces
-`source/dcc-repick.cc`, a call from `dcc_enter_floor`, a menu using the
-existing `Menu` class (model: `acquirement_menu` in `acquire.cc`), smoke
-checks with a forced choice.
+### Phase 6f — Sponsor signing: join hook and Gold box
+`docs/dcc/phases/6f-sponsor-signing.md`. One guarded line at the end of
+`join_religion()` calls `dcc_god_joined()` (`dcc-sponsor.cc`): joining
+from a booth altar announces the deal and awards one Gold box, once; the
+Announcer names the sponsors on D:3 arrival. ~9 files, three one-liners.
+Status: not started
 
-Budget: ~5 files touched; read `species.h`, `wiz-you.cc` 110–140
-(`wizard_change_species`), `acquire.cc` `acquirement_menu`.
+### Phase 6g — Species re-pick core
+`docs/dcc/phases/6g-repick-core.md`. First arrival on D:3 rolls three
+starting species and marks the offer pending (`dcc-repick.cc`);
+`dcc_repick_apply()` changes species with trunk's `change_species_to()`
+and spends the one-shot; script-only dlua drives it. ~7 files.
+Status: not started
 
-Gate: Standard gate (smoke: `dcc.repick_species("Minotaur")` changes the
-species reported by the dlua `you.race()` accessor (confirm the exact name in
-`l-you.cc`); assert it changed and `you.props["dcc_repicked"]` is set).
+### Phase 6h — Kits
+`docs/dcc/phases/6h-kits.md`. Three kits (steel, arcana, supplies) as item
+spec tables, dropped at the player's feet by `dcc_give_kit()`
+(`dgn_place_multiple_items`), one per game. ~4 files.
+Status: not started
 
-Verification: arrive on D:3, accept the re-roll, species changes, kit drops.
-
-Risks. `change_species_to` is a wizard tool; it may leave mutations or
-equipment in odd states (e.g. a Felid holding a sword). Run the same
-post-change fixups wizmode runs and drop unwearable gear to the floor.
-
+### Phase 6i — Live re-pick offer
+`docs/dcc/phases/6i-repick-offer.md`. The `main.cc` hook becomes
+`dcc_before_command()` (re-pick offer, then quest offer); the pitch and
+the species/kit prompts run from there with Escape = later. ~8 files.
 Status: not started
 
 ---
@@ -867,6 +874,35 @@ Status: not started
    depth + 3 (`env.absdepth0 + 4`), not `you.depth + 3`. Branch-relative
    depth would make a Lair:1 box roll level-4 junk; on D:N both give N + 3.
 
+## Open questions for Phase 6 (each has a default; phases proceed under it)
+
+1. **Boss roster.** Five fixed, hand-written bosses (table in 6a) or a
+   random depth monster buffed by a multiplier? Default: fixed five; it
+   gives the Announcer something to say and keeps tuning in one table.
+2. **Boss optional or mandatory?** Default: optional; the clock already
+   pressures the player, and a gate on the stairs would need a trunk hook.
+3. **Which four themes?** Default: `crowd` (more monsters), `headliners`
+   (monsters from four floors deeper, 120% clock, +1 quest tier), `reruns`
+   (undead versions, grey), `lightning` (60% clock, +1 quest tier). Should
+   D:1 stay unthemed? Default: yes.
+4. **Theme visibility in tiles.** Console colours do not show in tiles;
+   should 6d also set floor/wall tiles (`env.tile_default`)? Default: no;
+   the Announcer line and the status light are the cue.
+5. **Sponsor pool.** Any joinable temple god, or a curated set (no Gozag,
+   no Ru)? Default: any joinable temple god minus the current one; gods
+   keep their rules, including Gozag's fee.
+6. **Booth bonus size.** One Gold box, once. Default: as stated; a bigger
+   bonus would make the booth the obvious play on every run.
+7. **Re-pick pool.** Three random starting species, or the whole list in a
+   menu? Default: three random (the spec's text); a full menu is a bigger
+   UI and invites min-maxing.
+8. **Kits.** Three fixed bundles (6h) or a random job's starting kit via
+   trunk's `give_job_equipment()`? Default: fixed bundles dropped on the
+   floor; `give_job_equipment` writes into `you.inv` assuming an empty
+   new-game pack.
+9. **Declining the re-roll.** Does a decline still get a kit? Default: no;
+   the kit is compensation for the re-roll's disruption.
+
 ## Assumptions (proceeding under)
 
 - Builds run from Git Bash on this machine; Python and Perl are on PATH for
@@ -877,3 +913,6 @@ Status: not started
 - Trademark avoidance applies to in-game strings and content file names;
   the internal `dcc` identifier is fine.
 - Phase 0 may amend the Standard gate block; later phases read it as amended.
+- Phase 6 proceeds under the defaults in "Open questions for Phase 6" until
+  the user answers; an answer that differs is recorded in
+  `spec-history/open-questions-answered.md` and the affected phase file.
