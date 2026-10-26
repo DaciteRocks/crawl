@@ -3148,6 +3148,37 @@ local function phase6i()
         "and gives no kit")
   check(you.race() == race0, "and changes no species")
 
+  -- Putting the question off (Escape) lasts until the player has stepped
+  -- off the safe cells: a turn inside keeps it, a turn outside clears it.
+  -- A fresh roll and a new or restored game clear it too, so one game's
+  -- Escape never carries into the next save loaded.
+  local ox, oy
+  for y = 2, dgn.GYM - 3 do
+    for x = 2, dgn.GXM - 3 do
+      if not ox and dgn.feature_name(dgn.grid(x, y)) == "floor"
+         and not dcc.is_safe_cell(x, y) and dgn.mons_at(x, y) == nil then
+        ox, oy = x, y
+      end
+    end
+  end
+  check(ox ~= nil, "D:3 has a floor cell outside the safe room")
+  check(not dcc.repick_put_off(), "nothing is put off yet")
+  check(dcc.repick_put_off(true), "the question can be put off")
+  dcc.player_turn(10)
+  check(dcc.repick_put_off(), "a turn on a safe cell keeps it put off")
+  you.moveto(ox, oy)
+  dcc.player_turn(10)
+  check(not dcc.repick_put_off(), "a turn off the safe cells clears it")
+  you.moveto(px, py)
+  dcc.repick_put_off(true)
+  mark()
+  dcc.before_command()
+  check(quiet() and dcc.repick_pending(), "a put-off offer stays open")
+  dcc.repick_put_off(true)
+  dcc.arrival_spot("new_game")
+  check(not dcc.repick_put_off(), "a new or restored game clears it")
+  you.moveto(px, py)
+
   -- Declining gets no kit.
   dcc.repick_decline()
   check(not dcc.kit_pending() and dcc.kit() == nil,

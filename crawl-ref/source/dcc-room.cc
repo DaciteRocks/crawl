@@ -53,6 +53,7 @@
 #include "branch.h"
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-repick.h" // dcc_repick_level_loaded
 #include "dcc-sponsor.h" // DCC_SPONSOR_PROP
 #include "dcc-theme.h" // dcc_assign_theme
 #include "dlua.h"
@@ -132,11 +133,17 @@ const map_def *dcc_arrival_map(bool minivault)
  * UP_I), which lands them on a down stair, outside the safe room. In Crawl
  * Live every game starts as if it came down a stair, on the room's '{'.
  * Other loads, including a Descent stair peek stepping back up, are left
- * alone.
+ * alone. Every load but a visit (new game, restored game, level change)
+ * also clears a put-off re-roll or kit question (dcc_repick_level_loaded()),
+ * since the flag that holds it is not saved.
  */
 dungeon_feature_type dcc_start_stair(dungeon_feature_type stair_taken,
                                      load_mode_type load_mode)
 {
+    // Every load but a visit: a question the player put off in another
+    // game or on another floor is asked afresh.
+    if (crawl_state.game_is_dcc() && load_mode != LOAD_VISITOR)
+        dcc_repick_level_loaded();
     if (crawl_state.game_is_dcc() && load_mode == LOAD_START_GAME
         && feat_is_stone_stair_up(stair_taken))
     {
