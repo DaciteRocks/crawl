@@ -1012,6 +1012,10 @@ check(dcc.box_open_turns(1) > 0
       "opening takes time, the same for every box ("
       .. dcc.box_open_turns(1) .. " turns each)")
 
+local function kiosk_spot()
+  return dgn.find_marker_position_by_prop("dcc_kiosk", "1")
+end
+
 dcc.reset_achievements()
 debug.goto_place("D:1")
 test.regenerate_level()
@@ -1020,7 +1024,7 @@ dcc.start_floor_clock()
 -- done by hand. The later regenerated levels are left inactive on purpose:
 -- there only the explicit dcc.open_boxes() calls open anything.
 dcc.activate_markers()
-local kx, ky = dcc.kiosk_spot()
+local kx, ky = kiosk_spot()
 check(kx ~= nil, "D:1's safe room has a kiosk")
 check(dcc.is_safe_cell(kx, ky), "the kiosk is a safe cell")
 local kdesc = dgn.feature_desc_at(kx, ky, "plain")
@@ -1046,27 +1050,36 @@ for y = 1, dgn.GYM - 2 do
 end
 check(room_x ~= nil and out_x ~= nil, "cells inside and outside the room")
 
--- Item stacks within radius 2 of the kiosk, and their names.
+-- Item stacks within radius 2 of the kiosk: how many, their names, how
+-- many are artefacts, how many of each base type ("weapon", "wand", ...),
+-- and how many the player's god forbids.
 local function items_near_kiosk()
-  local n, names, arts, unrands = 0, {}, 0, 0
+  local n, names, arts, kinds, forbidden = 0, {}, 0, {}, 0
   for y = ky - 2, ky + 2 do
     for x = kx - 2, kx + 2 do
-      local c, nm, a, u = dcc.items_at(x, y)
-      n, arts, unrands = n + c, arts + a, unrands + u
-      for _, s in ipairs(nm) do
-        table.insert(names, s)
+      for _, it in ipairs(dgn.items_at(x, y)) do
+        n = n + 1
+        table.insert(names, it.name())
+        if it.artefact then
+          arts = arts + 1
+        end
+        kinds[it.base_type] = (kinds[it.base_type] or 0) + 1
       end
+      forbidden = forbidden + dcc.forbidden_items_at(x, y)
     end
   end
   table.sort(names)
-  return n, names, arts, unrands
+  return n, names, arts, kinds, forbidden
+end
+local function kind(kinds, k)
+  return kinds[k] or 0
 end
 -- Every item stack on the level.
 local function items_on_level()
   local n = 0
   for y = 1, dgn.GYM - 2 do
     for x = 1, dgn.GXM - 2 do
-      n = n + dcc.items_at(x, y)
+      n = n + #dgn.items_at(x, y)
     end
   end
   return n
@@ -1127,6 +1140,23 @@ you.moveto(kx, ky)
 check(dcc.box_count() == 0, "stepping onto the kiosk opens the held box")
 check(items_near_kiosk() > before_near, "and its items drop by the kiosk")
 
+-- Travel, autoexplore and running cross the kiosk without opening
+-- anything or saying anything; a deliberate step afterwards opens.
+dcc.award_box("Bronze")
+you.moveto(room_x, room_y)
+dcc.set_running(true)
+mark()
+you.moveto(kx, ky)
+check(dcc.box_count() == 1, "travelling onto the kiosk opens nothing")
+check(quiet(), "and the kiosk says nothing")
+ok, why = dcc.kiosk_stepped()
+check(not ok and why == "declined",
+      "a step while running is declined silently (" .. why .. ")")
+dcc.set_running(false)
+you.moveto(room_x, room_y)
+you.moveto(kx, ky)
+check(dcc.box_count() == 0, "a deliberate step back onto the kiosk opens it")
+
 -- Boxes survive a save and reload, and open afterwards.
 dcc.award_box("Bronze")
 dcc.save_roundtrip()
@@ -1135,13 +1165,58 @@ check(dcc.box_count() == 1 and dcc.boxes()[1] == "Bronze",
 ok, why = dcc.open_boxes()
 check(ok and dcc.box_count() == 0, "and opens after it")
 
+-- The kiosk marker survives the level's save and reload: it is read back,
+-- activated, and still opens boxes when stepped on.
+dcc.award_box("Bronze")
+you.moveto(room_x, room_y)
+check(dcc.markers_roundtrip() > 0, "the level's markers make a round trip")
+local kx2, ky2 = kiosk_spot()
+check(kx2 == kx and ky2 == ky, "the kiosk is where it was")
+you.moveto(kx, ky)
+check(dcc.box_count() == 0,
+      "after the round trip, stepping onto the kiosk still opens boxes")
+
+-- The live game's delay: a box opens as each one's turns are up, and an
+-- interrupt or leaving the kiosk stops it between boxes, the opened ones
+-- staying opened and the rest held.
+local per_box = dcc.box_open_turns(1)
+dcc.award_box("Bronze")
+dcc.award_box("Bronze")
+dcc.award_box("Bronze")
+ok, why = dcc.open_boxes(true, true)
+check(ok and dcc.delayed() and dcc.box_count() == 3,
+      "the kiosk starts its delay with every box still held")
+check(dcc.run_delays(per_box) == per_box and dcc.box_count() == 2,
+      "the first box opens after its " .. per_box .. " turns")
+mark()
+dcc.stop_delay()
+check(not dcc.delayed() and dcc.box_count() == 2,
+      "an interrupt stops the kiosk; the opened box stays opened")
+check(since_mark():find("2 boxes stay sealed", 1, true) ~= nil,
+      "and the Announcer says what stays sealed")
+ok, why = dcc.open_boxes(true, true)
+dcc.run_delays(1)
+you.moveto(room_x, room_y)
+dcc.run_delays(1)
+check(not dcc.delayed() and dcc.box_count() == 2,
+      "leaving the kiosk mid-delay stops it, boxes held")
+you.moveto(kx, ky) -- a scripted step: opens at once
+check(dcc.box_count() == 0, "the held boxes open at the next step")
+dcc.award_box("Bronze")
+dcc.award_box("Gold")
+ok, why = dcc.open_boxes(true, true)
+local turns = dcc.run_delays(100)
+check(turns == dcc.box_open_turns(2) and not dcc.delayed()
+      and dcc.box_count() == 0,
+      "an uninterrupted delay opens every box in " .. turns .. " turns")
+
 -- Every tier opens into its items. The acquirement-quality items never
 -- stack, so from Gold up each takes one item slot of its own (a random
 -- item, such as gold, may merge into a stack already there).
 for _, tier in ipairs({ "Bronze", "Silver", "Gold", "Platinum", "Legendary",
                         "Celestial" }) do
   local slots = dcc.free_item_slots()
-  local _, _, arts_before = items_near_kiosk()
+  local _, _, arts_before, kinds_before = items_near_kiosk()
   dcc.award_box(tier)
   mark()
   ok, why = dcc.open_boxes()
@@ -1155,41 +1230,92 @@ for _, tier in ipairs({ "Bronze", "Silver", "Gold", "Platinum", "Legendary",
     check(used == box_items[tier], "the " .. tier .. " box dropped "
           .. box_items[tier] .. " items (" .. used .. ")")
   end
+  local _, _, arts_after, kinds_after = items_near_kiosk()
+  if tier == "Platinum" then
+    local function gear(k)
+      return kind(k, "weapon") + kind(k, "armour")
+    end
+    check(gear(kinds_after) > gear(kinds_before),
+          "the Platinum box holds a weapon or armour")
+  end
+  if tier == "Celestial" then
+    check(kind(kinds_after, "wand") > kind(kinds_before, "wand"),
+          "the Celestial box holds a wand")
+  end
   if tier == "Legendary" or tier == "Celestial" then
-    local _, _, arts_after = items_near_kiosk()
     check(arts_after > arts_before,
           "the " .. tier .. " box holds an artefact")
   end
 end
 
+-- The artefact is guaranteed, and never one the player's god forbids or
+-- one they cannot use: the Shining One, who hates evil items, over many
+-- Legendary boxes.
+dcc.set_god("Shining One")
+check(you.god() == "the Shining One", "the player follows the Shining One ("
+      .. you.god() .. ")")
+dcc.check_achievements() -- "signed" adds a box; open it here
+dcc.open_boxes()
+test.regenerate_level()
+kx, ky = kiosk_spot()
+you.moveto(kx, ky)
+local legendary = 8
+for i = 1, legendary do
+  dcc.award_box("Legendary")
+  ok, why = dcc.open_boxes()
+  check(ok and dcc.box_count() == 0, "Legendary box " .. i .. " opens")
+end
+local _, _, arts, _, forbidden = items_near_kiosk()
+check(arts >= legendary, legendary .. " Legendary boxes held at least "
+      .. legendary .. " artefacts (" .. arts .. ")")
+check(forbidden == 0, "no box item is forbidden by the Shining One")
+local useless_arts = 0
+for y = ky - 2, ky + 2 do
+  for x = kx - 2, kx + 2 do
+    for _, it in ipairs(dgn.items_at(x, y)) do
+      if it.artefact and it.is_useless then
+        useless_arts = useless_arts + 1
+      end
+    end
+  end
+end
+check(useless_arts == 0, "no box artefact is useless to the player")
+-- The forbidden-item count does see a forbidden item.
+dgn.create_item(kx, ky, "dagger ego:draining")
+check(dcc.forbidden_items_at(kx, ky) >= 1,
+      "a draining dagger counts as forbidden by the Shining One")
+dcc.set_god("")
+check(you.god() == "No God", "and back to no god (" .. you.god() .. ")")
+
 -- Same game state, same RNG state, same prizes: a restored save opens the
 -- same boxes into the same items, so save-scumming the kiosk gains nothing
 -- over any other DCSS randomness. (An unrandart can be made only once, so
--- the comparison holds only if the first run made none.)
+-- if the first run made an artefact the second may differ.)
 local function seeded_gold_box()
   test.regenerate_level()
-  kx, ky = dcc.kiosk_spot()
+  kx, ky = kiosk_spot()
   you.moveto(kx, ky)
   debug.reset_rng(4242)
   dcc.award_box("Gold")
   dcc.open_boxes()
-  local _, names, _, unrands = items_near_kiosk()
-  return table.concat(names, "|"), unrands
+  local _, names, n_arts = items_near_kiosk()
+  return table.concat(names, "|"), n_arts
 end
-local first_names, first_unrands = seeded_gold_box()
+local first_names, first_arts = seeded_gold_box()
 local second_names = seeded_gold_box()
 check(first_names ~= "", "the seeded Gold box made items")
-if first_unrands == 0 then
+if first_names == second_names or first_arts == 0 then
   check(first_names == second_names,
         "the same RNG state opens the same prizes (" .. first_names .. ")")
 else
-  crawl.stderr("dcc_smoke: seeded box made an unrandart; repeat check skipped\n")
+  crawl.stderr("dcc_smoke: seeded box made an artefact that may be an "
+               .. "unrandart; repeat check skipped\n")
 end
 
--- A level whose item table is nearly full jams the kiosk instead of making
--- trunk cull the level's items: the box stays sealed and nothing is lost.
+-- The kiosk works out up front how many boxes the level has room for and
+-- opens only those; the rest stay sealed with one jam message.
 test.regenerate_level()
-kx, ky = dcc.kiosk_spot()
+kx, ky = kiosk_spot()
 you.moveto(kx, ky)
 local far_x, far_y
 for y = 1, dgn.GYM - 2 do
@@ -1201,22 +1327,40 @@ for y = 1, dgn.GYM - 2 do
   end
 end
 check(far_x ~= nil, "a floor cell far from the kiosk")
-while dcc.free_item_slots() > 1 do
-  dgn.create_item(far_x, far_y, "dagger")
+local function fill_to(free)
+  while dcc.free_item_slots() > free do
+    dgn.create_item(far_x, far_y, "dagger")
+  end
 end
-local level_items = items_on_level()
+fill_to(3)
 dcc.award_box("Bronze")
+dcc.award_box("Gold")
+check(dcc.boxes_that_fit() == 1,
+      "with 3 free slots only the 2-item Bronze box fits, not both")
+mark()
+ok, why = dcc.open_boxes()
+check(ok and dcc.box_count() == 1 and dcc.boxes()[1] == "Gold",
+      "only the box that fits opens; the Gold box stays held")
+check(count(since_mark():gsub("%s+", " "), "kiosk jams") == 1,
+      "one jam message for the box left over")
+
+-- A level whose item table is nearly full jams the kiosk before anything
+-- is asked, instead of making trunk cull the level's items: the box stays
+-- sealed and nothing is lost.
+fill_to(1)
+check(dcc.boxes_that_fit() == 0, "nothing fits with one free slot")
+local level_items = items_on_level()
 mark()
 ok, why = dcc.open_boxes()
 check(not ok and why == "jammed", "a full item table jams the kiosk ("
       .. why .. ")")
 check(dcc.box_count() == 1, "the jammed box stays sealed")
-check(since_mark():find("kiosk jams", 1, true) ~= nil,
-      "the Announcer explains the jam")
+check(count(since_mark():gsub("%s+", " "), "kiosk jams") == 1,
+      "the Announcer explains the jam, once")
 check(items_on_level() == level_items and dcc.free_item_slots() == 1,
       "no item on the level was culled or added")
 test.regenerate_level()
-kx, ky = dcc.kiosk_spot()
+kx, ky = kiosk_spot()
 you.moveto(kx, ky)
 check(dcc.box_count() == 1 and dcc.at_kiosk(), "on a fresh level")
 ok, why = dcc.open_boxes()

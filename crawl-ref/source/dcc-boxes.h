@@ -27,12 +27,15 @@ enum class dcc_open_result
     not_dcc,      // not a Crawl Live game
     no_kiosk,     // the player is not on a safe-room kiosk
     no_boxes,     // nothing to open
-    declined,     // the player said no
+    declined,     // the player said no, or the step onto the kiosk was not a
+                  // deliberate one (travel, a blink, a teleport): no question
     jammed,       // the level has no room for more items; boxes stay sealed
 };
 
 int dcc_box_item_count(dcc_box_tier tier);
 int dcc_box_open_turns(int boxes);
 bool dcc_at_kiosk();
-dcc_open_result dcc_open_boxes(bool force);
+int dcc_boxes_that_fit();
+dcc_open_result dcc_open_boxes(bool force, bool live = false);
+dcc_open_result dcc_kiosk_stepped();
 int dcc_free_item_slots();
