@@ -177,3 +177,35 @@ before trunk's connectivity checks. `dcc_only` guards in `maps.cc` and
 Rejected: returning false when the vault lands off its spot. The vault is
 already written by then, so a retry would add a second room. It still
 vetoes, and now also clears the shape cache.
+
+## 2026-10-25 — Phase 4a done
+
+Landed: `dcc-achieve.cc/.h` with 20 one-shot achievements, each with its
+own Announcer line and box tier. They are checked at floor arrival, after
+every counted kill, on every player turn and after a collapse. Boxes are
+only recorded for now (`dcc_award_box` stub until 4b). Reviewers changed:
+- `unique_N` counts distinct unique types, so Boris and Natasha count once;
+  the old int count from the first 4a build is read as a minimum;
+- `floor_N` counts floors descended instead of absolute depth, which
+  over-counts in Descent's branches; `floor_12`'s line now names a count;
+- `quick_exit` needs a deliberate descent, a kill on the floor, and no
+  Abyss or portal visit (orchestrator decision; see Phase 4a). The arrival
+  hook in `files.cc` now also passes `stair_taken`;
+- kills of charmed hostiles count, as they give trunk XP; pacified monsters
+  still do not;
+- each unlock is one line that names its box ("a Gold box is added to your
+  winnings", no promise about safe rooms yet), and the unlocks from one hook
+  interrupt once (`dcc_unlock_batch`);
+- the `kill_streak` line is built from its tunables;
+- the table rows carry a kind and a threshold instead of nine wrapper
+  predicates. The per-turn check allocates nothing and stops early once
+  every state achievement is held;
+- the comment about XP timing in the kill hook is corrected: an XL unlock
+  from a kill's XP waits for the next turn's check;
+- smoke: banished, timed-out and reset monsters award nothing; a charmed
+  kill counts; Boris killed twice counts once; the quick_exit rules; branch
+  and shaft floor counting; unlocks through the per-turn hook (new
+  `dcc.player_turn`); one line per unlock in a burst. `spawn()` now uses
+  only empty cells and reads the monster's real position, and the unique
+  checks pick uniques that are still unplaced. Before this, a check could
+  kill one of the level's own monsters, so the script failed at random.

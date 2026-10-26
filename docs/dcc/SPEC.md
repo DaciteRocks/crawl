@@ -122,7 +122,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 2b | Clock surface: status light, Announcer channel, Zot clock off | done 2026-10-25 |
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | done 2026-10-25 |
 | 3b | Safe-room vault on every floor | done 2026-10-25 |
-| 4a | Achievement table, hooks, Announcer lines | not started |
+| 4a | Achievement table, hooks, Announcer lines | done 2026-10-25 |
 | 4b | Loot boxes and the kiosk | not started |
 | 5a | Quest engine (Lua, four objective kinds) | not started |
 | 5b | Quest giver NPC and offer flow | not started |
@@ -550,7 +550,26 @@ Risks. Kill hook must ignore kills that are not the player's (`killer_type`
 is player / player-ally) and not count summons/zombies oddly; copy the
 conditions `_give_player_experience` or `xp_gain` uses.
 
-Status: not started
+Achievement rules as built (later phases rely on these):
+- A counted kill is one trunk gives XP for (`mons_gives_xp()`, not
+  pacified), by the player or an ally. Charmed hostiles count; permanent
+  allies, summons and banished, timed-out or reset monsters do not.
+- `unique_N` counts distinct unique types (`you.props["dcc_uniques"]`), so
+  Boris coming back or Natasha reviving counts once.
+- `floor_N` uses floors descended (`you.props["dcc_floors"]`): D:1 is
+  floor 1; a new floor in the same branch adds its depth gain, and a new
+  floor in another branch adds 1. Absolute depth over-counts in Descent
+  (Lair:1 is absolute depth 11 wherever its entrance is).
+- `quick_exit` (anti-grind decision, 2026-10-25): it needs a deliberate
+  descent from the floor (a down stone stair or a branch entrance; not a
+  shaft, trapdoor, hatch, collapse, banishment or Abyss exit), no Abyss or
+  portal visit from that floor, at least one counted kill on it, and more
+  than 60% of its clock left. Diving D:1 without a kill earns nothing.
+- Each unlock is one `MSGCH_DCC` line that names its box, plus a note and a
+  milestone. All the unlocks from one hook (an arrival, a kill, a turn)
+  interrupt the player once.
+
+Status: done 2026-10-25
 
 ---
 

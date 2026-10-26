@@ -225,16 +225,33 @@ void dcc_start_floor_clock()
  *   floor): its parked clock resumes. A floor with nothing parked (it
  *   collapsed, or its entry was pruned) gets a fresh clock.
  *
+ * The achievement side rides along: a newly created floor advances the
+ * floor count (dcc_floor_reached()) and may earn quick_exit for the floor
+ * left (dcc_floor_left()); arriving off the connected branches marks the
+ * paused floor as detoured (dcc_left_for_detour()).
+ *
  * @param just_created  True on the first visit to this level (load_level's
  *                      just_created_level), as the Zot clock uses.
+ * @param how           The feature the player arrived by (load_level's
+ *                      stair_taken).
  */
-static void _enter_floor_clock(bool just_created)
+static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
 {
     const level_id here_id = level_id::current();
     if (!is_connected_branch(here_id))
+    {
+        dcc_left_for_detour();
         return;
+    }
 
     const string here = here_id.describe();
+    if (just_created)
+    {
+        dcc_floor_reached(you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY)
+                          ? you.props[DCC_FLOOR_CLOCK_PLACE_KEY].get_string()
+                          : string(),
+                          here_id);
+    }
     if (you.props.exists(DCC_FLOOR_CLOCK_PLACE_KEY))
     {
         const string old_place =
@@ -242,10 +259,13 @@ static void _enter_floor_clock(bool just_created)
         if (old_place == here && !just_created)
             return;
 
-        // Leaving a floor for a new one: quick_exit if most of its clock
-        // was left. The retry clock at a branch bottom does not count.
+        // Leaving a floor for a new one: maybe quick_exit. The retry clock
+        // at a branch bottom does not count.
         if (just_created && old_place != here && !_in_retry())
-            dcc_floor_left(_floor_aut_left(), _floor_aut_total());
+        {
+            dcc_floor_left(old_place, _floor_aut_left(), _floor_aut_total(),
+                           how);
+        }
 
         _park_clock(old_place, _floor_aut_left(), _floor_aut_total(),
                     _in_retry());
@@ -275,16 +295,21 @@ static void _enter_floor_clock(bool just_created)
 /**
  * The player has arrived on a level (files.cc load_level(), whenever the
  * arrival makes changes): run the floor clock's arrival logic, then check
- * the achievements (a floor reached, a floor left early).
+ * the achievements (a floor reached, a floor left early). Unlocks from one
+ * arrival interrupt the player once.
  *
  * @param just_created  True on the first visit to this level.
+ * @param how           The feature the player arrived by (load_level's
+ *                      stair_taken): quick_exit needs a down stair or a
+ *                      branch entrance.
  */
-void dcc_enter_floor(bool just_created)
+void dcc_enter_floor(bool just_created, dungeon_feature_type how)
 {
     if (!crawl_state.game_is_dcc())
         return;
 
-    _enter_floor_clock(just_created);
+    dcc_unlock_batch batch;
+    _enter_floor_clock(just_created, how);
     dcc_check_achievements();
 }
 
@@ -423,10 +448,10 @@ dcc_collapse_result dcc_tick_clock_by(int aut)
 /// Called once per player turn from player_reacts(). Also the per-turn
 /// achievement check, so state achievements (XL, runes, the Orb, a god)
 /// unlock on the turn they are met, on any level.
-void dcc_tick_clock()
+dcc_collapse_result dcc_tick_clock()
 {
     dcc_check_achievements();
-    dcc_tick_clock_by(you.time_taken);
+    return dcc_tick_clock_by(you.time_taken);
 }
 
 /// Turns left on the floor clock, rounded up; 0 if no clock runs. While the

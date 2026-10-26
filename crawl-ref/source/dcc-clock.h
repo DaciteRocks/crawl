@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "dungeon-feature-type.h"
 #include "level-id.h"
 
 struct status_info;
@@ -40,9 +41,9 @@ enum class dcc_collapse_result
 
 int dcc_floor_turns_for(const level_id &place);
 
-void dcc_enter_floor(bool just_created);
+void dcc_enter_floor(bool just_created, dungeon_feature_type how);
 void dcc_start_floor_clock();
-void dcc_tick_clock();
+dcc_collapse_result dcc_tick_clock();
 dcc_collapse_result dcc_tick_clock_by(int aut);
 dcc_collapse_result dcc_collapse_floor();
 

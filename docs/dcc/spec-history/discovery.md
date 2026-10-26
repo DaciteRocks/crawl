@@ -118,3 +118,22 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
   vault is written and cannot be taken back.
 - `reread_maps()` rebuilds every `map_def` when a des file changes under a
   running game, so cached `map_def` pointers must be refreshed by name.
+
+## Phase 4a — achievements (2026-10-25)
+
+- `branches[].absdepth` is fixed per branch (Lair 10, Orc 10, Elf 15,
+  Vaults 19, ...). Descent does not renumber it, so absolute depth is no
+  floor count once you leave D. DCC counts floors descended instead
+  (`DCC_FLOORS_KEY`).
+- `load_level()`'s `stair_taken` is the arrival feature after
+  `floor_transition()`'s fix-ups: `DNGN_TRAP_SHAFT` for any shaft or
+  trapdoor and for the DCC collapse, `DNGN_EXIT_ABYSS` out of the Abyss,
+  the stone stair or branch entry otherwise.
+- A spec monster placed with `dgn.create_monster()` can land off the
+  requested cell, and the level's own monsters may stand there. Read the
+  position back from the returned monster. Trunk places each unique once
+  per game (`_should_veto_unique()`), so a script that regenerates many
+  levels must check `you.uniques(name)` before spawning one. Boris and
+  Natasha are cleared on death.
+- `crawl.messages()` wraps long lines, so text matches must normalise
+  whitespace.

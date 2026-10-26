@@ -157,15 +157,66 @@ LUAFN(dcc_start_floor_clock_lua)
  * parked one on a floor visited before, and pauses the clock outside
  * connected branches. Script/test only.
  * @tparam boolean just_created true for a first visit to the level
+ * @tparam[opt] string how how the player arrived: "stairs" (down a stone
+ *   stair; the default), "branch" (through this branch's entrance), "shaft"
+ *   (a shaft, trapdoor or floor collapse), "hatch" (an escape hatch down),
+ *   "abyss_exit" (out of the Abyss) or "abyss" (banished or into the Abyss)
  * @function enter_floor
  */
 LUAFN(dcc_enter_floor_lua)
 {
     const bool just_created = lua_toboolean(ls, 1);
+    const string how = lua_isnoneornil(ls, 2) ? "stairs"
+                                              : luaL_checkstring(ls, 2);
     if (!_dcc_script_only(ls, "enter_floor"))
         return 0;
-    dcc_enter_floor(just_created);
+    dungeon_feature_type taken;
+    if (how == "stairs")
+        taken = DNGN_STONE_STAIRS_DOWN_I;
+    else if (how == "branch")
+        taken = your_branch().entry_stairs;
+    else if (how == "shaft")
+        taken = DNGN_TRAP_SHAFT;
+    else if (how == "hatch")
+        taken = DNGN_ESCAPE_HATCH_DOWN;
+    else if (how == "abyss_exit")
+        taken = DNGN_EXIT_ABYSS;
+    else if (how == "abyss")
+        taken = DNGN_ENTER_ABYSS;
+    else
+    {
+        return luaL_error(ls, "dcc.enter_floor(): unknown arrival '%s'",
+                          how.c_str());
+    }
+    dcc_enter_floor(just_created, taken);
     return 0;
+}
+
+/*** Run one player turn's worth of the per-turn DCC hook, as
+ * player_reacts() does (dcc_tick_clock()): the achievement check, then the
+ * floor clock spends aut. Script/test only.
+ * @tparam int aut the turn's length
+ * @treturn string|nil as dcc.tick()
+ * @function player_turn
+ */
+LUAFN(dcc_player_turn_lua)
+{
+    const int aut = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "player_turn"))
+        return 0;
+    unwind_var<int> taken(you.time_taken, aut);
+    switch (dcc_tick_clock())
+    {
+    case dcc_collapse_result::fell:
+        PLUARET(string, "fell");
+    case dcc_collapse_result::fall_skipped:
+        PLUARET(string, "fall_skipped");
+    case dcc_collapse_result::no_floor:
+        PLUARET(string, "no_floor");
+    case dcc_collapse_result::none:
+    default:
+        return 0;
+    }
 }
 
 /*** Is this cell a Crawl Live safe cell (FPROP_DCC_SAFE)? False out of
@@ -551,6 +602,25 @@ LUAFN(dcc_check_achievements_lua)
     return 0;
 }
 
+/*** The deepest floor number reached: D:1 is floor 1, and each newly
+ * reached floor adds the floors descended to get there.
+ * @treturn int
+ * @function floors_reached
+ */
+LUAFN(dcc_floors_reached_lua)
+{
+    PLUARET(number, dcc_floors_reached());
+}
+
+/*** How many distinct uniques the player or an ally has killed.
+ * @treturn int
+ * @function uniques_killed
+ */
+LUAFN(dcc_uniques_killed_lua)
+{
+    PLUARET(number, dcc_uniques_killed());
+}
+
 /*** How many boxes the player holds, unopened.
  * @treturn int
  * @function box_count
@@ -595,7 +665,7 @@ LUAFN(dcc_achievement_table_lua)
         lua_setfield(ls, -2, "id");
         lua_pushstring(ls, ach.name);
         lua_setfield(ls, -2, "name");
-        lua_pushstring(ls, ach.line);
+        lua_pushstring(ls, dcc_achievement_line(ach).c_str());
         lua_setfield(ls, -2, "line");
         lua_pushstring(ls, dcc_box_tier_name(ach.tier));
         lua_setfield(ls, -2, "tier");
@@ -615,7 +685,11 @@ LUAFN(dcc_reset_achievements_lua)
     you.props.erase(DCC_ACHIEVEMENTS_KEY);
     you.props.erase(DCC_BOXES_KEY);
     you.props.erase(DCC_KILL_TIMES_KEY);
-    you.props.erase(DCC_UNIQUES_KILLED_KEY);
+    you.props.erase(DCC_UNIQUES_KEY);
+    you.props.erase(DCC_UNIQUES_KILLED_LEGACY_KEY);
+    you.props.erase(DCC_FLOORS_KEY);
+    you.props.erase(DCC_KILL_PLACE_KEY);
+    you.props.erase(DCC_DETOUR_PLACE_KEY);
     return 0;
 }
 
@@ -642,6 +716,38 @@ LUAFN(dcc_kill_lua)
     monster *mons = victim->as_monster();
     mons->hurt(agent, mons->hit_points);
     PLUARET(boolean, !mons->alive());
+}
+
+/*** Make the monster at (x, y) leave without a kill, through monster_die()
+ * with the player as the cause: "banished" (KILL_BANISHED, as banishing it
+ * does), "timeout" (KILL_TIMEOUT) or "reset" (KILL_RESET). Script/test only.
+ * @tparam int x
+ * @tparam int y
+ * @tparam string how
+ * @function remove_monster
+ */
+LUAFN(dcc_remove_monster_lua)
+{
+    actor *victim = _dcc_actor_at(ls, 1);
+    const string how = luaL_checkstring(ls, 3);
+    if (!_dcc_script_only(ls, "remove_monster"))
+        return 0;
+    if (!victim || !victim->is_monster())
+        return luaL_error(ls, "dcc.remove_monster(): no monster there");
+    killer_type killer;
+    if (how == "banished")
+        killer = KILL_BANISHED;
+    else if (how == "timeout")
+        killer = KILL_TIMEOUT;
+    else if (how == "reset")
+        killer = KILL_RESET;
+    else
+    {
+        return luaL_error(ls, "dcc.remove_monster(): unknown way '%s'",
+                          how.c_str());
+    }
+    monster_die(*victim->as_monster(), killer, MHITYOU);
+    return 0;
 }
 
 /*** Move the game's elapsed time on by some aut, as passing turns would
@@ -700,6 +806,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "tick", dcc_tick_lua },
 { "start_floor_clock", dcc_start_floor_clock_lua },
 { "enter_floor", dcc_enter_floor_lua },
+{ "player_turn", dcc_player_turn_lua },
 { "is_safe_cell", dcc_is_safe_cell_lua },
 { "monster_can_step", dcc_monster_can_step_lua },
 { "monster_can_land", dcc_monster_can_land_lua },
@@ -718,10 +825,13 @@ static const struct luaL_Reg dcc_dlib[] =
 { "unlock", dcc_unlock_lua },
 { "check_achievements", dcc_check_achievements_lua },
 { "box_count", dcc_box_count_lua },
+{ "floors_reached", dcc_floors_reached_lua },
+{ "uniques_killed", dcc_uniques_killed_lua },
 { "boxes", dcc_boxes_lua },
 { "achievement_table", dcc_achievement_table_lua },
 { "reset_achievements", dcc_reset_achievements_lua },
 { "kill", dcc_kill_lua },
+{ "remove_monster", dcc_remove_monster_lua },
 { "advance_time", dcc_advance_time_lua },
 { "save_roundtrip", dcc_save_roundtrip_lua },
 { nullptr, nullptr }
