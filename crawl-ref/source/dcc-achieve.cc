@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief Crawl Live (DCC) achievements and the box stub they award.
+ * @brief Crawl Live (DCC) achievements and the boxes they award.
  *
  * Achievements are one-shot per game: each id is appended to
  * you.props[DCC_ACHIEVEMENTS_KEY] once and never again, so nothing here
@@ -266,8 +266,8 @@ void dcc_floor_reached(const string &old_place, const level_id &here)
     you.props[DCC_FLOORS_KEY].get_int() += step;
 }
 
-/// Record a box for the player. A stub until Phase 4b makes boxes openable
-/// at the safe-room kiosk.
+/// Record a box for the player. It opens at a safe-room kiosk
+/// (dcc_open_boxes(), dcc-boxes.cc).
 void dcc_award_box(dcc_box_tier tier)
 {
     if (!crawl_state.game_is_dcc())

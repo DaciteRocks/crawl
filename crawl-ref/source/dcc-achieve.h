@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief Crawl Live (DCC) achievements and the box stub they award.
+ * @brief Crawl Live (DCC) achievements and the boxes they award.
 **/
 
 #pragma once

@@ -4,10 +4,13 @@
 # Every connected-branch floor of a Crawl Live game gets exactly one of these
 # (dcc-room.cc places it; on D:1 it is the arrival vault). It holds all of
 # the floor's up stairs, so every arrival lands inside, plus a general shop
-# that charges normal DCSS prices and a placeholder loot box kiosk (K, plain
-# floor for now). Every cell inside the walls is dcc_safe: hostile monsters
-# cannot enter, and there is no combat inside (dcc-safe.cc). The door stays
-# an ordinary cell, the way out for a hostile that ends up inside.
+# that charges normal DCSS prices and the loot box kiosk (K): a plain floor
+# cell whose marker opens the player's boxes when they step onto it
+# (dcc_kiosk_activate() in dlua/dcc.lua, dcc-boxes.cc), and whose dcc_kiosk
+# property is what makes it a kiosk. Every cell inside the walls is dcc_safe:
+# hostile monsters cannot enter, and there is no combat inside (dcc-safe.cc).
+# The door stays an ordinary cell, the way out for a hostile that ends up
+# inside.
 #
 # Placement relies on these shapes as written: dcc-room.cc reads the map
 # lines to find the one door and digs the room into solid rock with the door
@@ -23,6 +26,8 @@
 # Dis and the Crypt the room simply stays rock).
 ###############################################################################
 
+: crawl_require('dlua/dcc.lua')
+
 # Door to the south.
 NAME:   dcc_safe_room_a
 TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
@@ -32,7 +37,7 @@ ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
-MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
 MAP
 xxxxxxxxx
 x{..S..(x
@@ -50,7 +55,7 @@ ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
-MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
 MAP
 xxxx+xxxx
 x.......x
@@ -68,7 +73,7 @@ ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
-MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
 MAP
 xxxxxxx
 x{...Sx
@@ -88,7 +93,7 @@ ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
 KPROP:  .{([SK = dcc_safe
-MARKER: K = lua:portal_desc { desc = "a loot box kiosk (inactive)" }
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
 MAP
 xxxxxxx
 xS...{x
