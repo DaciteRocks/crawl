@@ -33,7 +33,7 @@
 #include "env.h"
 #include "hiscores.h" // mark_milestone
 #include "dungeon.h" // dgn_place_multiple_items
-#include "items.h" // link_items
+#include "items.h" // link_items, identify_item
 #include "level-id.h"
 #include "mapdef.h" // item_list
 #include "message.h"
@@ -242,12 +242,14 @@ void dcc_repick_decline()
 
 /// The kits. Specs are des ITEM: syntax (docs/develop/levels/syntax.txt);
 /// the smoke checks that every line parses. "Good" items, not
-/// acquirement-grade: boxes are the loot mechanic.
+/// acquirement-grade: boxes are the loot mechanic. The armour and the
+/// weapon get a fixed plus rather than good_item, which makes them
+/// artefacts as often as not.
 static const vector<dcc_kit> _kits =
 {
     { "steel", "Steel",
       "A sword, a shirt, and something to hide behind.",
-      { "long sword good_item", "scale mail good_item", "kite shield",
+      { "long sword plus:2", "scale mail plus:2", "kite shield plus:1",
         "potion of might q:2" } },
     { "arcana", "Arcana",
       "Spells, a robe, and the ring the budget allowed.",
@@ -280,30 +282,65 @@ static bool _kit_cell_ok(const coord_def &c)
     return !feat_is_solid(feat) && !feat_eliminates_items(feat);
 }
 
-/// Where the kit lands: the player's cell, or (flying over lava or deep
-/// water) the nearest cell in sight where the items stay reachable.
-static coord_def _kit_spot()
+/**
+ * Where the kit lands, as box drops prefer plain floor: the player's cell
+ * if it is plain floor; else the nearest plain floor cell in sight; else
+ * the nearest cell in sight (the player's first) where items stay
+ * reachable. Never a cell that destroys or swallows items.
+ *
+ * @param[out] spot  the cell found.
+ * @return           false if no cell in sight qualifies (a flyer over a
+ *                   lake of lava or deep water).
+ */
+static bool _kit_spot(coord_def &spot)
 {
-    if (_kit_cell_ok(you.pos()))
-        return you.pos();
+    if (env.grid(you.pos()) == DNGN_FLOOR)
+    {
+        spot = you.pos();
+        return true;
+    }
     for (distance_iterator di(you.pos(), false, true, LOS_RADIUS); di; ++di)
-        if (_kit_cell_ok(*di) && you.see_cell_no_trans(*di))
-            return *di;
-    return you.pos();
+    {
+        if (env.grid(*di) == DNGN_FLOOR && you.see_cell_no_trans(*di))
+        {
+            spot = *di;
+            return true;
+        }
+    }
+    for (distance_iterator di(you.pos(), false, false, LOS_RADIUS); di; ++di)
+    {
+        if (_kit_cell_ok(*di) && (*di == you.pos()
+                                  || you.see_cell_no_trans(*di)))
+        {
+            spot = *di;
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The kit cannot be delivered now; the one-shot is kept for later.
+static void _announce_kit_jam(const dcc_kit &kit, const char *why)
+{
+    dcc_announce(make_stringf("The %s kit is stuck in the chute: %s",
+                              kit.name, why));
 }
 
 /**
  * Give the player a kit: its items, made from the table's specs with
- * trunk's dgn_place_multiple_items(), land on the floor at the player's
- * feet (never in the pack, so a full inventory does not matter). The
- * Announcer names it, a note records it, and the one-shot is spent.
+ * trunk's dgn_place_multiple_items() (which puts every item of the list
+ * on the one cell it is given, unlinked; link_items() follows), land
+ * identified on one floor cell at or near the player's feet (_kit_spot();
+ * never in the pack, so a full inventory does not matter). The Announcer
+ * names it, a note records it, and the one-shot is spent.
  *
  * @param id     the kit's id in dcc_kit_table().
  * @param force  give it even if a kit was already given (scripts).
  * @return       false, giving nothing, outside Crawl Live, for an unknown
  *               id, when a kit was already given (unless forced), or when
- *               the level's item table has no room for the kit (the
- *               Announcer says so and the one-shot is kept for later).
+ *               the kit cannot be put down: the level's item table has no
+ *               room for it, or no cell in sight holds items safely. The
+ *               Announcer says so and the one-shot is kept for later.
  */
 bool dcc_give_kit(const string &id, bool force)
 {
@@ -327,15 +364,29 @@ bool dcc_give_kit(const string &id, bool force)
     // Each spec makes one item; never make trunk cull the level's items.
     if (dcc_free_item_slots() < static_cast<int>(list.size()))
     {
-        dcc_announce(make_stringf("The %s kit is stuck in the chute: this "
-                                  "floor is too cluttered for a delivery. "
-                                  "Clear some space and ask again.",
-                                  kit->name));
+        _announce_kit_jam(*kit, "this floor is too cluttered for a "
+                                "delivery. Clear some space and ask again.");
+        return false;
+    }
+    coord_def spot;
+    if (!_kit_spot(spot))
+    {
+        _announce_kit_jam(*kit, "there is nowhere here to put it down. "
+                                "Find some solid floor and ask again.");
         return false;
     }
 
-    dgn_place_multiple_items(list, _kit_spot());
+    // dgn_place_multiple_items() returns no indices: the kit's items are
+    // the slots that were free before it and are filled after.
+    vector<bool> was_free(MAX_ITEMS);
+    for (int i = 0; i < MAX_ITEMS; ++i)
+        was_free[i] = !env.item[i].defined();
+    dgn_place_multiple_items(list, spot);
     link_items();
+    // A kit is a known quantity: what it holds is on the label.
+    for (int i = 0; i < MAX_ITEMS; ++i)
+        if (was_free[i] && env.item[i].defined())
+            identify_item(env.item[i]);
 
     you.props[DCC_KIT_KEY].get_string() = kit->id;
     dcc_announce(make_stringf("Kit delivered: %s. %s", kit->name,

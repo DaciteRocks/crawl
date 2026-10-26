@@ -164,7 +164,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 6e | Sponsor booth in the D:3 safe room | done 2026-10-25 |
 | 6f | Sponsor signing: join hook and Gold box | done 2026-10-25 |
 | 6g | Species re-pick core | done 2026-10-25 |
-| 6h | Kits | not started |
+| 6h | Kits | done 2026-10-25 |
 | 6i | Live re-pick offer | not started |
 
 Phases 1, 2, 3, 4 were each split from one agreed feature into two commits
@@ -839,7 +839,7 @@ Status: done 2026-10-25
 `docs/dcc/phases/6h-kits.md`. Three kits (steel, arcana, supplies) as item
 spec tables, dropped at the player's feet by `dcc_give_kit()`
 (`dgn_place_multiple_items`), one per game. ~4 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6i — Live re-pick offer
 `docs/dcc/phases/6i-repick-offer.md`. The `main.cc` hook becomes

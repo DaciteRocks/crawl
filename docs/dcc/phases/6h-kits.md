@@ -62,8 +62,8 @@ cluttered level jams the kit the way it jams a box).
   `mprf(MSGCH_ERROR)`, skip that line). If `dcc_free_item_slots()` is
   below the line count, announce a jam like the kiosk does and return
   false without consuming the one-shot. Else
-  `dgn_place_multiple_items(list, you.pos())` (it spreads over adjacent
-  cells as needed); set `DCC_KIT_KEY`; `dcc_announce("Kit delivered:
+  `dgn_place_multiple_items(list, you.pos())` (it puts every item on that
+  one cell and does not link them; see As built); set `DCC_KIT_KEY`; `dcc_announce("Kit delivered:
   <name>. <blurb>")`; `take_note(Note(NOTE_MESSAGE, 0, 0, "Received the
   <name> kit"))`. Return true.
 - l-dcc.cc: `dcc.kits()` → array of `{ id=, name=, blurb=, items= }`;
@@ -98,4 +98,31 @@ Smoke only until 6i; in wizard mode there is no way to call
 - Item names in specs drift with trunk (books get renamed); the `valid`
   check in the smoke fails the gate when one does, which is the point.
 
-Status: not started
+## As built (deviations from the text above)
+
+- `dgn_place_multiple_items()` does not spread items: it puts every item
+  on the one cell it is given and leaves them unlinked, so
+  `dcc_give_kit()` calls `link_items()` after it (as trunk's
+  `dgn.create_item` does). The whole kit lands on one cell.
+- Where it lands (`_kit_spot()`, review fix): the player's cell if it is
+  plain floor, else the nearest plain floor cell in sight, else the
+  nearest cell in sight where items stay reachable (not solid, not lava,
+  not deep water the species cannot swim). Never an item-destroying
+  cell. If nothing qualifies (a flyer over a lake of lava) it is a jam.
+- Jams: a full item table or no cell to land on refuses the kit without
+  spending the one-shot. The Announcer line is "The <Name> kit is stuck
+  in the chute: ..." with the reason (too cluttered / nowhere here to put
+  it down).
+- Kit items arrive identified (`identify_item()`, review fix): the item
+  slots free before `dgn_place_multiple_items()` and filled after it are
+  the kit's. Their types become known, as with any identified item.
+- Steel uses `long sword plus:2`, `scale mail plus:2`, `kite shield
+  plus:1` instead of `good_item`: in the smoke, `good_item` rolled a
+  randart scale mail with a Bane malus, which is neither "good" nor
+  below acquirement grade.
+- Extra helpers beyond the text: `dcc_find_kit(id)` (C++), and the
+  script-only `dcc.reset_kit()`.
+- The smoke also checks both jams (one-shot kept), every kit item's real
+  name, and a kit given over lava landing on plain floor next to it.
+
+Status: done 2026-10-25

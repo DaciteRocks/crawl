@@ -412,3 +412,20 @@ Draconian for a Draconian and species the current god refuses (re-checked
 on apply), a booth re-settle after a re-pick, and no Felid lives after
 leaving the Felid body. Deviations and the trunk limits left as is are in
 the phase file.
+
+## 2026-10-25 — Phase 6h done
+
+Landed: kits. `dcc-repick.cc` holds three (Steel, Arcana, Supplies) as
+des item specs; `dcc_give_kit()` drops one with trunk's
+`dgn_place_multiple_items()` plus `link_items()` on one cell at the
+player's feet, never into the pack, then the Announcer, a note and the
+one-shot (`dcc_kit`). Unknown ids and a second unforced kit are refused.
+No trunk hooks. dlua `kits` (with a per-kit parse check), `kit`;
+script-only `give_kit`, `reset_kit`. Review fixes (all reviewer findings
+were verified as non-defects; the orchestrator asked for three anyway):
+kit items arrive identified; the landing cell prefers plain floor, and
+no safe cell in sight (a flyer over lava) is a jam that keeps the
+one-shot; the "spreads" claim in the phase text is corrected. Also:
+Steel's weapon and armour use a fixed plus instead of `good_item`, which
+rolled artefacts. Deviations are in the phase file; 6i's file now notes
+that kits should suit the picked species.

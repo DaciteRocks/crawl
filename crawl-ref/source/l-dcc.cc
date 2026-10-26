@@ -1980,6 +1980,18 @@ LUAFN(dcc_kit_lua)
     return 1;
 }
 
+/*** Forget the kit given this game, as in a game that never got one.
+ * Script/test only.
+ * @function reset_kit
+ */
+LUAFN(dcc_reset_kit_lua)
+{
+    if (!_dcc_script_only(ls, "reset_kit"))
+        return 0;
+    you.props.erase(DCC_KIT_KEY);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -2085,6 +2097,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "kits", dcc_kits_lua },
 { "give_kit", dcc_give_kit_lua },
 { "kit", dcc_kit_lua },
+{ "reset_kit", dcc_reset_kit_lua },
 { nullptr, nullptr }
 };
 

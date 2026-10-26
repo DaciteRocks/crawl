@@ -96,6 +96,15 @@ changes (title line), the kit prompt follows, `2` drops the Arcana kit at
 your feet, then the steward's quest offer appears as usual. In a second
 game press `n`: nothing changes, and it never asks again.
 
+## Note from Phase 6h (orchestrator, 2026-10-25)
+
+Offer only the kits that suit the picked species: a Felid or an Octopode
+should not be offered the Steel kit (it can wear none of it). How is 6i's
+call: the item generator's useful/can-wear checks (`is_useless_item`,
+`can_wear_armour`) on the kit's items, or a simple per-kit species filter
+in the kit table. If every kit is filtered out, decide what the player
+gets (probably the Supplies kit, which suits everyone).
+
 ## Risks
 
 - `getchm()` inside `_input()` before the command is read: the quest
