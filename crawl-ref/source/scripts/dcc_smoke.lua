@@ -1847,6 +1847,25 @@ local function phase5b()
   check(dcc.take_pending_offer() == "D:1",
         "the read-back trigger still notes the offer")
 
+  -- Only a real y or n settles the offer: one put off (Escape; headless,
+  -- an unforced answer) stays open, is not asked again while the steward
+  -- stays in sight, and can still be accepted later.
+  q = dcc.quest_state()
+  mark()
+  check(dcc_quest_debug().offer() == false, "an unanswered offer is put off")
+  check(said("Say hello to the Floor Steward") and said("Think it over"),
+        "the Announcer introduces the steward and lets the player think")
+  check(not q.offered and not q.accepted and not q.declined,
+        "the put-off offer stays open")
+  dcc.fire_los(sx, sy)
+  check(dcc.take_pending_offer() == nil,
+        "a put-off offer is not asked again while the steward stays in sight")
+  mark()
+  check(dcc_quest_debug().accept() == true and q.accepted,
+        "the put-off quest can still be accepted")
+  check(said("offer still stands") and not said("Say hello"),
+        "the steward is introduced only once")
+
   -- The steward cannot be harmed in the safe room; killed anyway, it is
   -- no kill and it voids the quest.
   check(not dcc.can_harm(px, py, sx, sy), "the safe room protects the steward")

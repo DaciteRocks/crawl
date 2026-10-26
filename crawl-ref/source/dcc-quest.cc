@@ -33,18 +33,20 @@
 #include "act-iter.h" // monster_iterator
 #include "coord.h"
 #include "coordit.h"
-#include "delay.h" // you_are_delayed
 #include "dcc-safe.h" // is_dcc_safe_cell
+#include "delay.h" // you_are_delayed
 #include "dlua.h"
 #include "dungeon.h" // map_masked
 #include "env.h"
 #include "fprop.h"
+#include "macro.h" // has_pending_input
 #include "mapmark.h"
 #include "message.h"
 #include "mon-tentacle.h"
 #include "mon-util.h"
 #include "monster.h"
 #include "player.h"
+#include "prompt.h" // yesno
 #include "state.h"
 #include "terrain.h"
 
@@ -266,6 +268,10 @@ monster *dcc_prepare_steward()
 // update while the steward is in sight.
 static string _offer_place;
 
+// The floor whose offer the player put off (Escape at the question): it
+// is not asked again until the steward has been out of sight. Not saved.
+static string _put_off_place;
+
 /// The steward's function_in_los marker fired (dcc_steward_seen() in
 /// dat/dlua/dcc.lua): its cell is in view. Note the offer for the main
 /// loop; dcc_quest_offer() asks only once per floor.
@@ -292,6 +298,7 @@ string dcc_take_pending_offer()
     const string place = _offer_place;
     _offer_place.clear();
     if (place != level_id::current().describe()
+        || place == _put_off_place
         || you.running || you_are_delayed())
     {
         return "";
@@ -302,16 +309,73 @@ string dcc_take_pending_offer()
     return place;
 }
 
+/// Forget a put-off offer once the player is elsewhere or the steward is
+/// out of sight, so the next sight of it asks again.
+static void _update_put_off()
+{
+    if (_put_off_place.empty())
+        return;
+    const monster *steward = dcc_find_steward();
+    if (_put_off_place != level_id::current().describe()
+        || !steward || !you.can_see(*steward))
+    {
+        _put_off_place.clear();
+    }
+}
+
+/**
+ * Ask whether the player takes the steward's quest (dcc_quest_offer() in
+ * dcc_quests.lua). Only an explicit y or n answers; Escape, Enter, space
+ * or a hangup puts the offer off, and it is asked again the next time the
+ * steward comes into sight. Headless scripts and tests are never asked:
+ * they get the put-off answer.
+ *
+ * @param question The question.
+ * @return true for yes, false for no, maybe for put off.
+ */
+maybe_bool dcc_ask_quest_offer(const string &question)
+{
+    maybe_bool answer = maybe_bool::maybe;
+    if (!crawl_state.script && !crawl_state.test && !crawl_state.seen_hups)
+    {
+        // Without a default answer yesno() repeats the question on any
+        // other key; these keys put the offer off instead, returned as the
+        // "always" answer (so a typed A puts it off too; yesno()'s "only,
+        // please" line then lists [A]lways, which here means later).
+        const explicit_keymap later = {
+            { ESCAPE, 'A' }, { CONTROL('G'), 'A' }, { -1, 'A' },
+            { ' ', 'A' }, { '\r', 'A' }, { '\n', 'A' },
+        };
+        const string prompt = question + " (y/n, Esc: later)";
+        const int key = yesno(prompt.c_str(), true, 0, true, true, false,
+                              &later, false, true);
+        if (!crawl_state.seen_hups && key != 2)
+            answer = key == 1;
+    }
+    if (answer == maybe_bool::maybe)
+        _put_off_place = level_id::current().describe();
+    return answer;
+}
+
 /**
  * The main loop is about to read the player's next command (main.cc
  * _input(), after the view update and any delay): make the steward's
- * quest offer if one is waiting. Headless scripts and tests have no main
- * loop; they call dcc_quest_offer() with their answer.
+ * quest offer if one is waiting and no keys are queued. Headless scripts
+ * and tests have no main loop; they call dcc_quest_offer() with their
+ * answer.
  */
 void dcc_quest_before_command()
 {
     if (!crawl_state.game_is_dcc() || crawl_state.script || crawl_state.test)
         return;
+    _update_put_off();
+    // Keys already queued (a macro, sendkeys, a repeated or replayed
+    // command) would answer the question: keep the note for later.
+    if (has_pending_input() || crawl_state.is_repeating_cmd()
+        || crawl_state.is_replaying_keys())
+    {
+        return;
+    }
     const string place = dcc_take_pending_offer();
     if (place.empty())
         return;
@@ -322,7 +386,8 @@ void dcc_quest_before_command()
 /**
  * The Floor Steward died (dcc_monster_killed(), for any death): its floor's
  * quest is void, with a taunt (dcc_quest_steward_died() in
- * dcc_quests.lua). No kill credit, no achievement.
+ * dcc_quests.lua). No achievement or quest credit and no XP; trunk's kill
+ * list (you.kills) still records it.
  */
 void dcc_steward_died(const monster &mons)
 {

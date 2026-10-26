@@ -1330,6 +1330,22 @@ LUAFN(dcc_steward_seen_lua)
     return 0;
 }
 
+/*** Ask whether the player takes the Floor Steward's quest
+ * (dcc_ask_quest_offer()): true for y, false for n, nil when the player
+ * puts it off (Escape, Enter, space, a hangup) or the game is headless.
+ * A put-off offer is asked again once the steward has been out of sight.
+ * @tparam string question
+ * @treturn boolean|nil
+ * @function ask_offer
+ */
+LUAFN(dcc_ask_offer_lua)
+{
+    const maybe_bool answer = dcc_ask_quest_offer(luaL_checkstring(ls, 1));
+    if (answer == maybe_bool::maybe)
+        return 0;
+    PLUARET(boolean, bool(answer));
+}
+
 /*** Take the noted quest offer, as the main loop does before the player's
  * next command (dcc_take_pending_offer()): the floor to offer, or nil if
  * none is waiting or it cannot be made now. Script/test only.
@@ -1432,6 +1448,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "steward_pos", dcc_steward_pos_lua },
 { "steward_seen", dcc_steward_seen_lua },
 { "take_pending_offer", dcc_take_pending_offer_lua },
+{ "ask_offer", dcc_ask_offer_lua },
 { "fire_los", dcc_fire_los_lua },
 { nullptr, nullptr }
 };

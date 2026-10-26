@@ -11,7 +11,8 @@
 # on the player's first arrival (dcc_quest_setup() in dlua/dcc_quests.lua).
 # The Floor Steward (1) offers that quest: a good neutral human whose
 # MonPropsMarker gives it the dcc_steward prop (it keeps its post and is
-# worth no XP or kill credit, dcc-safe.cc, dcc-quest.cc), and whose cell's
+# worth no XP, achievement or quest credit, dcc-safe.cc, dcc-quest.cc,
+# though trunk's kill list still records it), and whose cell's
 # function_in_los marker makes the offer when the player sees it
 # (dcc_steward_seen() in dlua/dcc.lua, dcc_quest_offer()).
 # Every cell inside the walls is dcc_safe:
