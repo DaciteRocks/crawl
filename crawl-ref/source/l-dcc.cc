@@ -12,12 +12,17 @@ module "dcc"
 #include "dcc.h"
 #include "branch.h"
 #include "dcc-achieve.h"
+#include "dcc-boxes.h"
 #include "dcc-clock.h"
 #include "dcc-room.h"
 #include "dcc-safe.h"
 #include "coord.h"
 #include "coordit.h"
 #include "dungeon.h"
+#include "env.h"
+#include "artefact.h" // is_artefact
+#include "items.h" // stack_iterator
+#include "mapmark.h"
 #include "fight.h"
 #include "flood-find.h"
 #include "maps.h"
@@ -795,6 +800,173 @@ LUAFN(dcc_save_roundtrip_lua)
     PLUARET(number, loaded.size());
 }
 
+static const char *_dcc_open_result_name(dcc_open_result res)
+{
+    switch (res)
+    {
+    case dcc_open_result::opened:   return "opened";
+    case dcc_open_result::not_dcc:  return "not_dcc";
+    case dcc_open_result::no_kiosk: return "no_kiosk";
+    case dcc_open_result::no_boxes: return "no_boxes";
+    case dcc_open_result::declined: return "declined";
+    case dcc_open_result::jammed:   return "jammed";
+    }
+    return "unknown";
+}
+
+/*** Open the player's boxes at the kiosk they stand on (the kiosk's
+ * marker calls this). Asks first in a live game, unless forced; headless
+ * scripts and tests never ask and open at once, where a live game takes
+ * dcc.box_open_turns() turns.
+ * @tparam[opt] boolean force skip the question
+ * @treturn boolean whether the boxes opened (or began opening)
+ * @treturn string "opened", "not_dcc", "no_kiosk" (not on a safe-room
+ *   kiosk), "no_boxes", "declined" or "jammed" (no room for more items on
+ *   the level; the boxes stay sealed)
+ * @function open_boxes
+ */
+LUAFN(dcc_open_boxes_lua)
+{
+    const dcc_open_result res = dcc_open_boxes(lua_toboolean(ls, 1));
+    lua_pushboolean(ls, res == dcc_open_result::opened);
+    lua_pushstring(ls, _dcc_open_result_name(res));
+    return 2;
+}
+
+/*** Is the player standing on a safe-room kiosk?
+ * @treturn boolean
+ * @function at_kiosk
+ */
+LUAFN(dcc_at_kiosk_lua)
+{
+    PLUARET(boolean, dcc_at_kiosk());
+}
+
+/*** Where the level's kiosk is: the first cell carrying the kiosk marker
+ * property. Returns nothing if the level has none.
+ * @treturn int|nil x
+ * @treturn int|nil y
+ * @function kiosk_spot
+ */
+LUAFN(dcc_kiosk_spot_lua)
+{
+    for (rectangle_iterator ri(1); ri; ++ri)
+    {
+        if (env.markers.property_at(*ri, MAT_ANY, DCC_KIOSK_PROP) == "1")
+        {
+            lua_pushnumber(ls, ri->x);
+            lua_pushnumber(ls, ri->y);
+            return 2;
+        }
+    }
+    return 0;
+}
+
+/*** Activate the level's markers, as arriving on a level does (load_level()
+ * runs env.markers.activate_all()); test.regenerate_level() does not, so
+ * without this a script's level has no live kiosk. Script/test only.
+ * @function activate_markers
+ */
+LUAFN(dcc_activate_markers_lua)
+{
+    if (!_dcc_script_only(ls, "activate_markers"))
+        return 0;
+    env.markers.activate_all(false);
+    return 0;
+}
+
+// A box tier by its name ("Bronze", ...); raises a Lua error otherwise.
+static dcc_box_tier _dcc_tier_arg(lua_State *ls, int arg)
+{
+    const string name = luaL_checkstring(ls, arg);
+    for (int t = 0; t < NUM_DCC_BOX_TIERS; ++t)
+    {
+        const dcc_box_tier tier = static_cast<dcc_box_tier>(t);
+        if (name == dcc_box_tier_name(tier))
+            return tier;
+    }
+    luaL_error(ls, "dcc: no box tier '%s'", name.c_str());
+    return DCC_BOX_BRONZE;
+}
+
+/*** Give the player a box of a tier, as an achievement would. Script/test
+ * only.
+ * @tparam string tier "Bronze", "Silver", "Gold", "Platinum", "Legendary"
+ *   or "Celestial"
+ * @function award_box
+ */
+LUAFN(dcc_award_box_lua)
+{
+    const dcc_box_tier tier = _dcc_tier_arg(ls, 1);
+    if (!_dcc_script_only(ls, "award_box"))
+        return 0;
+    dcc_award_box(tier);
+    return 0;
+}
+
+/*** How many items a box of a tier holds.
+ * @tparam string tier
+ * @treturn int
+ * @function box_item_count
+ */
+LUAFN(dcc_box_item_count_lua)
+{
+    PLUARET(number, dcc_box_item_count(_dcc_tier_arg(ls, 1)));
+}
+
+/*** How many turns the kiosk takes to open this many boxes.
+ * @tparam int boxes
+ * @treturn int
+ * @function box_open_turns
+ */
+LUAFN(dcc_box_open_turns_lua)
+{
+    PLUARET(number, dcc_box_open_turns(luaL_safe_checkint(ls, 1)));
+}
+
+/*** How many more items the level can hold before trunk starts culling
+ * items to make room.
+ * @treturn int
+ * @function free_item_slots
+ */
+LUAFN(dcc_free_item_slots_lua)
+{
+    PLUARET(number, dcc_free_item_slots());
+}
+
+/*** The item stacks on a cell (none out of bounds).
+ * @tparam int x
+ * @tparam int y
+ * @treturn int how many stacks
+ * @treturn table their names (DESC_PLAIN, as the game would print them)
+ * @treturn int how many are artefacts
+ * @treturn int how many are unrandarts
+ * @function items_at
+ */
+LUAFN(dcc_items_at_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    int n = 0, arts = 0, unrands = 0;
+    lua_newtable(ls);
+    if (in_bounds(c))
+    {
+        for (stack_iterator si(c); si; ++si)
+        {
+            lua_pushstring(ls, si->name(DESC_PLAIN).c_str());
+            lua_rawseti(ls, -2, ++n);
+            if (is_artefact(*si))
+                ++arts;
+            if (is_unrandom_artefact(*si))
+                ++unrands;
+        }
+    }
+    lua_pushnumber(ls, n);
+    lua_insert(ls, -2);
+    lua_pushnumber(ls, arts);
+    lua_pushnumber(ls, unrands);
+    return 4;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -834,6 +1006,15 @@ static const struct luaL_Reg dcc_dlib[] =
 { "remove_monster", dcc_remove_monster_lua },
 { "advance_time", dcc_advance_time_lua },
 { "save_roundtrip", dcc_save_roundtrip_lua },
+{ "open_boxes", dcc_open_boxes_lua },
+{ "at_kiosk", dcc_at_kiosk_lua },
+{ "kiosk_spot", dcc_kiosk_spot_lua },
+{ "activate_markers", dcc_activate_markers_lua },
+{ "award_box", dcc_award_box_lua },
+{ "box_item_count", dcc_box_item_count_lua },
+{ "box_open_turns", dcc_box_open_turns_lua },
+{ "free_item_slots", dcc_free_item_slots_lua },
+{ "items_at", dcc_items_at_lua },
 { nullptr, nullptr }
 };
 
