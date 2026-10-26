@@ -18,13 +18,15 @@
 #
 # Never placed at random: no DEPTH, and dcc_only keeps them out of every
 # other game type (maps.cc, dungeon.cc). allow_dup lets the same variant
-# appear on many floors.
+# appear on many floors. no_wall_fixup keeps the room's walls plain rock: on
+# Slime they would turn slimy and corrode everyone standing beside them (in
+# Dis and the Crypt the room simply stays rock).
 ###############################################################################
 
 # Door to the south.
 NAME:   dcc_safe_room_a
 TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
-TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
 TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
@@ -42,7 +44,7 @@ ENDMAP
 # Door to the north.
 NAME:   dcc_safe_room_b
 TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
-TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
 TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
@@ -60,7 +62,7 @@ ENDMAP
 # Door to the east.
 NAME:   dcc_safe_room_c
 TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
-TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
 TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
@@ -80,7 +82,7 @@ ENDMAP
 # Door to the west.
 NAME:   dcc_safe_room_d
 TAGS:   dcc_safe_room dcc_only allow_dup no_monster_gen no_tele_into
-TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
 TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store

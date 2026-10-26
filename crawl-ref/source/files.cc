@@ -45,6 +45,7 @@
 #include "dactions.h"
 #include "dbg-util.h"
 #include "dcc-clock.h"
+#include "dcc-room.h"
 #include "dgn-overview.h"
 #include "directn.h"
 #include "dungeon.h"
@@ -1520,6 +1521,14 @@ static void _place_player(dungeon_feature_type stair_taken,
     }
 }
 
+// Crawl Live: dcc.arrival_spot() (l-dcc.cc) places the player through the
+// real arrival code above, so the smoke test cannot drift from it.
+void dcc_place_player_as_arriving(dungeon_feature_type stair_taken)
+{
+    if (crawl_state.game_is_dcc())
+        _place_player(stair_taken, coord_def(), random_in_bounds(), "");
+}
+
 // Update the trackers after the player changed level.
 // note: also run on load for some reason in startup.cc
 void trackers_init_new_level()
@@ -2104,6 +2113,8 @@ static void _learn_transporters()
 bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
                 const level_id& old_level)
 {
+    if (crawl_state.game_is_dcc())
+        stair_taken = dcc_start_stair(stair_taken, load_mode);
     const string level_name = level_id::current().describe();
     if (!you.save->has_chunk(level_name) && load_mode == LOAD_VISITOR)
         return false;
