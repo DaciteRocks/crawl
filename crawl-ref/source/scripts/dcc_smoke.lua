@@ -635,11 +635,16 @@ end
 local px, py = next_cell()
 you.moveto(px, py)
 -- Place a monster on the next free outside cell; returns its x, y.
+-- Only empty cells, and the position is read back from the monster itself:
+-- the level's own monsters must never be the ones a check kills.
 local function spawn(spec)
   for i = 1, 200 do
     local x, y = next_cell()
-    if not (x == px and y == py) and dgn.create_monster(x, y, spec) then
-      return x, y
+    if not (x == px and y == py) and dgn.mons_at(x, y) == nil then
+      local m = dgn.create_monster(x, y, spec)
+      if m then
+        return mpos(m)
+      end
     end
   end
   error("dcc_smoke FAILED: could not place " .. spec)
@@ -719,6 +724,22 @@ dcc.reset_achievements()
 kill("orc")
 check(dcc.has_achievement("first_blood"), "a kill by the player counts")
 
+-- A charmed hostile still gives trunk XP, so killing it counts.
+dcc.reset_achievements()
+kill("orc ench:charm:500")
+check(dcc.has_achievement("first_blood"),
+      "killing a charmed (temporarily friendly) hostile counts")
+
+-- Banishing a monster, or one timing out or being reset, is no kill.
+dcc.reset_achievements()
+for _, how in ipairs({ "banished", "timeout", "reset" }) do
+  local x, y = spawn("orc")
+  dcc.remove_monster(x, y, how)
+  check(dgn.mons_at(x, y) == nil, "the orc is gone (" .. how .. ")")
+  check(not dcc.has_achievement("first_blood") and dcc.box_count() == 0,
+        "a " .. how .. " monster awards nothing")
+end
+
 -- Kills count in the Abyss and in portal vaults too (only the floor clock
 -- pauses there).
 for _, place in ipairs({ "Abyss:1", "Sewer" }) do
@@ -730,11 +751,23 @@ end
 debug.goto_place("D:3")
 
 -- Uniques: killed by the player or an ally, counted at 1, 3 and 5.
+-- Levels generated earlier in this run may already hold some uniques, and
+-- trunk places each only once, so take six that are still unplaced.
+local uniques = {}
+for _, name in ipairs({ "Grinder", "Sigmund", "Ijyb", "Jessica", "Terence",
+                        "Edmund", "Eustachio",
+                        "Prince Ribbit", "Menkaure", "Crazy Yiuf", "Erica",
+                        "Josephine", "Maurice", "Harold", "Joseph",
+                        "Gastronok", "Nergalle", "Louise" }) do
+  if #uniques < 6 and not you.uniques(name) then
+    table.insert(uniques, name)
+  end
+end
+check(#uniques == 6, "six unplaced uniques to fight")
 dcc.reset_achievements()
-kill("Grinder", "orc")
+kill(table.remove(uniques, 1), "orc")
 check(not dcc.has_achievement("unique_1"),
       "a unique killed by a hostile monster does not count")
-local uniques = { "Sigmund", "Ijyb", "Jessica", "Terence", "Edmund" }
 for i, name in ipairs(uniques) do
   if i == 2 then
     kill(name, "orc att:friendly")
@@ -745,6 +778,23 @@ for i, name in ipairs(uniques) do
         and dcc.has_achievement("unique_3") == (i >= 3)
         and dcc.has_achievement("unique_5") == (i >= 5),
         "unique achievements after " .. i .. " unique kill(s)")
+end
+check(dcc.uniques_killed() == 5, "five distinct uniques counted")
+
+-- A unique that comes back (Boris; Natasha revives the same way) counts once.
+-- (A level generated earlier may already hold Boris; trunk will not place a
+-- second copy, so the check needs him unplaced. Killing him unplaces him.)
+dcc.reset_achievements()
+if you.uniques("Boris") then
+  crawl.stderr("dcc_smoke: Boris already placed this run; re-kill check skipped\n")
+else
+  kill("Boris")
+  check(dcc.uniques_killed() == 1, "killing Boris counts one unique")
+  check(not you.uniques("Boris"), "a dead Boris can be placed again")
+  kill("Boris")
+  check(dcc.uniques_killed() == 1, "killing Boris again still counts one")
+  check(dcc.has_achievement("unique_1") and not dcc.has_achievement("unique_3"),
+        "and earns no more unique boxes")
 end
 
 -- big_game: a monster with HD at least XL + 5.
@@ -788,33 +838,148 @@ check(streaks == 1, "another ten quick kills award no second streak")
 check(dcc.box_count() == #dcc.achievements(),
       "after all the fights, still one box per achievement")
 
--- Floor entry: floors reached (absolute depth) and leaving a floor early.
+-- Each unlock is one Announcer line naming its box, even in a burst.
+local function count(hay, needle)
+  local n, at = 0, 1
+  while true do
+    local s = hay:find(needle, at, true)
+    if not s then
+      return n
+    end
+    n, at = n + 1, s + 1
+  end
+end
+dcc.reset_achievements()
+mark()
+kill("orc hd:" .. (you.xl() + 5))
+-- The history wraps long lines; join them back up.
+local burst = since_mark():gsub("%s+", " ")
+check(#dcc.achievements() >= 3,
+      "one big kill unlocks several achievements at once ("
+      .. #dcc.achievements() .. ")")
+check(count(burst, "Achievement unlocked:") == #dcc.achievements()
+      and count(burst, "box is added to your winnings") == #dcc.achievements(),
+      "one line per unlock, each naming its box")
+
+-- The real per-turn path (player_reacts() -> dcc_tick_clock()) runs the
+-- state checks: XL 26 meets xl_10 and xl_20 on the next turn.
+dcc.reset_achievements()
+check(not dcc.has_achievement("xl_10"), "xl_10 is not held after a reset")
+dcc.player_turn(10)
+check(dcc.has_achievement("xl_10") and dcc.has_achievement("xl_20"),
+      "the per-turn hook unlocks xl_10 and xl_20")
+local held = #dcc.achievements()
+dcc.player_turn(10)
+check(#dcc.achievements() == held, "the next turn unlocks nothing more")
+
+-- quick_exit: a deliberate descent (down stairs or a branch entrance) from a
+-- floor with a counted kill on it, no Abyss or portal visit from it, and
+-- more than 60% of its clock left.
+dcc.reset_achievements()
+debug.goto_place("D:1")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("quick_exit"),
+      "arriving with no kill anywhere is no quick exit")
+debug.goto_place("D:2")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("quick_exit"),
+      "stair-diving D:1 with no kill on it is no quick exit")
+kill("orc")
+debug.goto_place("D:3")
+dcc.enter_floor(true)
+check(dcc.has_achievement("quick_exit"),
+      "a kill, then the stairs down with the whole clock left: quick_exit")
+
+dcc.reset_achievements()
+kill("orc")
+debug.goto_place("D:4")
+dcc.enter_floor(true, "shaft")
+check(not dcc.has_achievement("quick_exit"),
+      "falling down a shaft (or a collapse) is no quick exit")
+
+dcc.reset_achievements()
+kill("orc")
+debug.goto_place("D:5")
+dcc.enter_floor(true, "hatch")
+check(not dcc.has_achievement("quick_exit"),
+      "dropping down a hatch is no quick exit")
+
+dcc.reset_achievements()
+kill("orc")
+debug.goto_place("Abyss:1")
+dcc.enter_floor(true, "abyss")
+debug.goto_place("D:6")
+dcc.enter_floor(true, "abyss_exit")
+check(not dcc.has_achievement("quick_exit"),
+      "banished, then out of the Abyss onto a new floor: no quick exit")
+
+dcc.reset_achievements()
+kill("orc")
+debug.goto_place("Sewer")
+dcc.enter_floor(true)
+debug.goto_place("D:6")
+dcc.enter_floor(false)
+debug.goto_place("D:7")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("quick_exit"),
+      "a portal detour from the floor rules out quick_exit")
+
+dcc.reset_achievements()
+kill("orc")
+dcc.set_floor_turns_left(480)  -- 40% of D:7's 1200
+debug.goto_place("D:8")
+dcc.enter_floor(true)
+check(not dcc.has_achievement("quick_exit"),
+      "leaving with 40% of the clock left is no quick exit")
+
+dcc.reset_achievements()
+kill("orc")
+debug.goto_place("Lair:1")
+dcc.enter_floor(true, "branch")
+check(dcc.has_achievement("quick_exit"),
+      "a kill, then a branch entrance with the clock left: quick_exit")
+
+-- Floor entry: floors reached, counted as floors descended.
 check(you.set_xl(1), "the player is back to XL 1")
 dcc.reset_achievements()
 debug.goto_place("D:1")
 dcc.enter_floor(true)
+check(dcc.floors_reached() == 1, "a new game starts on floor 1")
 check(not dcc.has_achievement("floor_2"), "D:1 is not floor 2")
 debug.goto_place("D:2")
 test.regenerate_level()
 dcc.enter_floor(true)
 check(dcc.has_achievement("floor_2"), "arriving on D:2 unlocks floor_2")
-check(dcc.has_achievement("quick_exit"),
-      "leaving D:1 with its whole clock left unlocks quick_exit")
 check(not dcc.has_achievement("floor_4"), "D:2 is not floor 4")
-check(#dcc.boxes() == 2, "two boxes: floor_2 and quick_exit")
+check(#dcc.boxes() == 1, "one box: floor_2")
 
 dcc.reset_achievements()
-dcc.set_floor_turns_left(600)  -- 40% of D:2's 1500
 debug.goto_place("D:3")
 dcc.enter_floor(true)
-check(not dcc.has_achievement("quick_exit"),
-      "leaving with 40% of the clock left is no quick exit")
 check(dcc.has_achievement("floor_2"), "floor_2 is met again after a reset")
 debug.goto_place("D:6")
 dcc.enter_floor(true)
 check(dcc.has_achievement("floor_4") and dcc.has_achievement("floor_6"),
       "skipping ahead to D:6 unlocks floor_4 and floor_6")
 check(not dcc.has_achievement("floor_8"), "D:6 is not floor 8")
+
+-- Another branch adds one floor, not its absolute depth (Lair:1 is absolute
+-- depth 11); a fall within a branch adds the floors fallen.
+dcc.reset_achievements()
+debug.goto_place("D:4")
+dcc.enter_floor(true)
+debug.goto_place("Lair:1")
+dcc.enter_floor(true, "branch")
+check(dcc.floors_reached() == 5, "D:4 then Lair:1 is floor 5 ("
+      .. dcc.floors_reached() .. ")")
+check(not dcc.has_achievement("floor_6"), "Lair:1 from D:4 is not floor 6")
+debug.goto_place("Lair:3")
+dcc.enter_floor(true, "shaft")
+check(dcc.floors_reached() == 7 and dcc.has_achievement("floor_6"),
+      "a two-floor fall to Lair:3 is floor 7")
+debug.goto_place("Lair:2")
+dcc.enter_floor(false)
+check(dcc.floors_reached() == 7, "stepping back up adds nothing")
 
 -- Off the connected branches depth says nothing: no floor achievements.
 dcc.reset_achievements()

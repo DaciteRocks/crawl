@@ -2531,7 +2531,7 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     }
 
     if (make_changes && crawl_state.game_is_dcc())
-        dcc_enter_floor(just_created_level);
+        dcc_enter_floor(just_created_level, stair_taken);
 
     // If the player entered the level from a different location than they last
     // exited it, have monsters lose track of where they are
