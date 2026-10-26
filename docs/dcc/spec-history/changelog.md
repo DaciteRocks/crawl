@@ -241,3 +241,20 @@ level's items. Every roll uses the game RNG. Reviewers changed:
   (progressive opening, interrupt, leaving the kiosk), Platinum gear,
   Celestial wand and artefact, no TSO-forbidden or useless artefact over 8
   Legendary boxes, and the kiosk marker after a level marker round trip.
+
+## 2026-10-25 — Phase 5a done
+
+Landed: one quest per connected-branch floor, set up by the safe room's
+epilogue on first arrival (`dat/dlua/dcc_quests.lua`, `dcc-quest.cc`):
+kill, fetch, reach and survive, chosen by depth band, announced, tracked
+by a `DccQuestMarker` at the kiosk, rewarded with a Bronze to Platinum box
+and counted in `dcc_quests_done`. State is per floor in
+`dgn.persist.dcc_quests` (persist is player-wide); the fetch item is
+jewellery; survive counts turns off the safe cells. No trunk hooks.
+Reviewers changed:
+- kill targets exclude vault monsters, and a kill quest recounts its
+  target after every death and on re-entry, lowering N to the kills made
+  plus the targets left, so a target lost without credit cannot strand it;
+- smoke: the survive boundary really checks 1499 aut (not done) and 1500
+  (done); a banished and a reset goblin lower and then complete a kill
+  quest.

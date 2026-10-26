@@ -1148,13 +1148,17 @@ LUAFN(dcc_quest_spot_lua)
 
 /*** The monster types a kill quest could ask for on the current level
  * (dcc_quest_kill_targets()), sorted by type.
+ * @tparam[opt] int mid a monster not to count (one whose death is being
+ *   heard)
  * @treturn table an array of { name = string, plural = string,
  *   count = int }
  * @function quest_kill_targets
  */
 LUAFN(dcc_quest_kill_targets_lua)
 {
-    const vector<dcc_kill_target> targets = dcc_quest_kill_targets();
+    const mid_t exclude = lua_isnoneornil(ls, 1)
+        ? MID_NOBODY : static_cast<mid_t>(luaL_safe_checkint(ls, 1));
+    const vector<dcc_kill_target> targets = dcc_quest_kill_targets(exclude);
     lua_newtable(ls);
     int i = 0;
     for (const dcc_kill_target &target : targets)

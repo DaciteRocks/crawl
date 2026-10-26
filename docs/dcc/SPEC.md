@@ -124,7 +124,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 3b | Safe-room vault on every floor | done 2026-10-25 |
 | 4a | Achievement table, hooks, Announcer lines | done 2026-10-25 |
 | 4b | Loot boxes and the kiosk | done 2026-10-25 |
-| 5a | Quest engine (Lua, four objective kinds) | not started |
+| 5a | Quest engine (Lua, four objective kinds) | done 2026-10-25 |
 | 5b | Quest giver NPC and offer flow | not started |
 | 6a | Floor bosses | not started |
 | 6b | Floor themes | not started |
@@ -662,7 +662,24 @@ otherwise expire silently. Kill quests must choose a monster type that
 actually exists on the floor at build time (`test.level_monster_iterator`
 style scan in the epilogue).
 
-Status: not started
+As built (deviations from the text above):
+- `dgn.persist` is not per level: it is saved with the player and cleared
+  only for a new game. Each floor's state is kept in
+  `dgn.persist.dcc_quests[place]` (place = `level_id::describe()`, unique
+  because only connected-branch floors have safe rooms);
+  `dcc.quest_state([place])` reads it.
+- The fetch item is a piece of jewellery, not a wand: picking up a wand of
+  a kind already held merges its charges into the held one, and the quest
+  flag goes with it.
+- Survive counts only turns spent off the safe room's cells; dropping
+  below half HP resets the count instead of failing the quest.
+- Kill targets exclude vault monsters, and a kill quest stays winnable:
+  after any death and on re-entry it lowers N to the kills made plus the
+  targets still on the floor, completing if none are left.
+- Map epilogues run on the player's first arrival, after the build, so
+  the kill scan sees the floor's real monsters.
+
+Status: done 2026-10-25
 
 ---
 
