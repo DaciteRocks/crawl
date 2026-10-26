@@ -2565,11 +2565,31 @@ local function phase6f()
         .. ")")
   check(dcc.sponsor() == nil, "no sponsor before a signing")
 
-  -- Signing at the first altar.
+  -- Joining some other god while standing on a booth altar (an orc's
+  -- conversion to Beogh, say) is no signing.
   check(not dcc.at_booth(), "the arrival spot is not a booth altar")
   you.moveto(altars[1].x, altars[1].y)
   check(dcc.at_booth(), "the player stands on the " .. altars[1].god
         .. " booth altar")
+  local other
+  for _, g in ipairs({ "Okawaru", "Trog", "Xom", "Elyvilon" }) do
+    if not other and g ~= altars[1].god and g ~= altars[2].god
+       and g ~= altars[3].god then
+      other = g
+    end
+  end
+  local golds0 = count_tier("Gold")
+  mark()
+  dcc.join_god(other)
+  check(you.god() == other, "the player joined " .. other .. " on the "
+        .. altars[1].god .. " altar")
+  check(count_tier("Gold") == golds0 and dcc.sponsor() == nil
+        and not said("signed you"),
+        "joining " .. other .. " on another god's booth altar is no signing")
+  dcc.set_god("")
+  dcc.reset_achievements()
+
+  -- Signing at the first altar.
   check(not dcc.has_achievement("signed"), "signed is not yet unlocked")
   local boxes, golds = dcc.box_count(), count_tier("Gold")
   mark()
