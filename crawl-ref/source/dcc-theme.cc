@@ -45,7 +45,7 @@ static const vector<dcc_theme> theme_table =
 {
     { "crowd", "Crowd Work",
       "The studio packed the floor. Try to stay charismatic.",
-      "place:{here} band w:30 / place:{here} w:10",
+      "place:{here}",
       LIGHTGREY, BROWN, 100, 0, 8 },
     { "headliners", "Headliners",
       "Tonight's guests came up from four floors down. They were promised "
@@ -151,33 +151,50 @@ static bool _can_derive(monster_type derived, monster_type base)
  * set_vault_mon_list() keeps only the place of a "place:" spec and drops a
  * derived-type modifier on it, so "place:D:5 zombie" alone would give live
  * D:5 monsters. Replace each such spec with concrete "<base> zombie" entries
- * (same weight each) whose bases are rolled from that place; other specs
- * pass through.
+ * whose bases are rolled from that place; other specs pass through.
+ *
+ * Weights: every spec's weight is first scaled by DCC_THEME_DERIVED_BASES
+ * (the same factor for all, so the list's ratios hold), and a derived
+ * spec's scaled weight is then split evenly across the bases found for it
+ * (at least 1 each). A spec that finds few bases thus keeps its share of
+ * the list instead of shrinking with the number of bases.
  */
 static vector<mons_spec> _concrete_specs(const vector<mons_spec> &specs)
 {
     vector<mons_spec> out;
     for (const mons_spec &spec : specs)
     {
+        const int weight = spec.genweight * DCC_THEME_DERIVED_BASES;
         if (!spec.place.is_valid() || spec.monbase == MONS_NO_MONSTER
             || !mons_class_is_zombified(spec.monbase))
         {
             out.push_back(spec);
+            out.back().genweight = weight;
             continue;
         }
-        set<monster_type> bases;
+        vector<monster_type> bases;
         for (int tries = 0; tries < DCC_THEME_DERIVED_TRIES
                             && (int) bases.size() < DCC_THEME_DERIVED_BASES;
              ++tries)
         {
             const monster_type base = pick_random_monster(spec.place);
-            if (bases.count(base) || !_can_derive(spec.monbase, base))
+            if (find(bases.begin(), bases.end(), base) != bases.end()
+                || !_can_derive(spec.monbase, base))
+            {
                 continue;
-            bases.insert(base);
+            }
+            bases.push_back(base);
+        }
+        if (bases.empty())
+            continue;
+        const int each = max(1, weight / (int) bases.size());
+        for (monster_type base : bases)
+        {
             mons_spec derived = spec;
             derived.place = level_id();
             derived.type = spec.monbase;
             derived.monbase = base;
+            derived.genweight = each;
             out.push_back(derived);
         }
     }
@@ -234,13 +251,21 @@ void dcc_assign_theme()
  * one): its random-monster list, which the level's own population
  * (_builder_monsters()) and later spawns draw from, and its floor and rock
  * colours, which trunk's _dgn_set_floor_colours() keeps when not BLACK.
- * Runs on every build, since a vetoed level is rebuilt from a reset env. A
- * vault placed later that sets its own monster list wins.
+ * Runs on every build, since a vetoed level is rebuilt from a reset env.
+ *
+ * It runs after the layout is built (from dcc_place_safe_room()), so a
+ * layout or encompass vault has already had its say: a monster list it set
+ * (set_vault_mon_list(), e.set_random_mon_list()) or a colour it set (des
+ * COLOUR lines, change_floor_colour) stays, and only the levers it left at
+ * trunk's defaults are themed. A vault placed later that sets its own
+ * monster list or colours overrides the theme's.
  */
 void dcc_apply_theme_build(const dcc_theme &theme)
 {
     const string spec = dcc_theme_mon_list(level_id::current());
-    if (!spec.empty())
+    // The key set_vault_mon_list() writes (mon-place.cc
+    // VAULT_MON_WEIGHTS_KEY); trunk tests it the same way.
+    if (!spec.empty() && !env.properties.exists("vault_mon_weights"))
     {
         mons_list ml;
         const string err = ml.add_mons(spec);
@@ -259,9 +284,9 @@ void dcc_apply_theme_build(const dcc_theme &theme)
                 set_vault_mon_list(specs);
         }
     }
-    if (theme.floor_colour != BLACK)
+    if (theme.floor_colour != BLACK && env.floor_colour == BLACK)
         env.floor_colour = theme.floor_colour;
-    if (theme.rock_colour != BLACK)
+    if (theme.rock_colour != BLACK && env.rock_colour == BLACK)
         env.rock_colour = theme.rock_colour;
 }
 
