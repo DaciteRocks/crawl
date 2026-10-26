@@ -33,6 +33,7 @@
 #include "act-iter.h" // monster_iterator
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-boss.h" // dcc_is_boss
 #include "dcc-safe.h" // is_dcc_safe_cell
 #include "delay.h" // you_are_delayed
 #include "dlua.h"
@@ -62,13 +63,13 @@ static bool _quest_walkable(const coord_def &c)
 }
 
 /// Could a quest target (the reach cell, the fetch item) go here? Plain
-/// empty floor outside every vault and safe room, with no marker, item or
-/// monster on it, that a teleport could land on.
-static bool _good_quest_spot(const coord_def &c)
+/// empty floor outside every vault (unless vaults_ok) and safe room, with no
+/// marker, item or monster on it, that a teleport could land on.
+static bool _good_quest_spot(const coord_def &c, bool vaults_ok)
 {
     return env.grid(c) == DNGN_FLOOR
            && !is_dcc_safe_cell(c)
-           && !map_masked(c, MMT_VAULT)
+           && (vaults_ok || !map_masked(c, MMT_VAULT))
            && !(env.pgrid(c) & FPROP_NO_TELE_INTO)
            && env.igrid(c) == NON_ITEM
            && !monster_at(c)
@@ -83,9 +84,13 @@ static bool _good_quest_spot(const coord_def &c)
  * @param from     Where the walk starts.
  * @param percent  0 for any reachable spot, 100 for only the farthest.
  * @param[out] spot The chosen cell.
+ * @param vaults_ok Allow cells inside vaults too: on an encompass map
+ *                  (Zot:5) every cell is a vault cell. Safe-room cells
+ *                  stay out.
  * @return false if no good spot is reachable.
  */
-bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot)
+bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot,
+                    bool vaults_ok)
 {
     if (!in_bounds(from))
         return false;
@@ -100,7 +105,7 @@ bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot)
     {
         const coord_def c = todo.front();
         todo.pop();
-        if (_good_quest_spot(c))
+        if (_good_quest_spot(c, vaults_ok))
             far_dist = max(far_dist, dist(c));
         for (adjacent_iterator ai(c); ai; ++ai)
         {
@@ -117,7 +122,7 @@ bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot)
     int seen = 0;
     for (rectangle_iterator ri(1); ri; ++ri)
     {
-        if (dist(*ri) < min_dist || !_good_quest_spot(*ri))
+        if (dist(*ri) < min_dist || !_good_quest_spot(*ri, vaults_ok))
             continue;
         if (one_chance_in(++seen))
             spot = *ri;
@@ -128,8 +133,9 @@ bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot)
 /**
  * The monster types a kill quest could ask for on the current level, with
  * how many of each it holds: hostile monsters that would give the player XP,
- * outside vaults and the safe room, and not uniques (floor bosses are Phase
- * 6a's), summons, firewood or tentacles. Sorted by type, so the choice from
+ * outside vaults and the safe room, and not uniques, floor bosses
+ * (dcc-boss.cc; placed outside vaults, so the vault test misses them),
+ * summons, firewood or tentacles. Sorted by type, so the choice from
  * it is reproducible. The kill quest also recounts its target with this, so
  * it can stay winnable.
  *
@@ -146,6 +152,7 @@ vector<dcc_kill_target> dcc_quest_kill_targets(mid_t exclude)
             || mons.wont_attack() || mons.neutral()
             || mons.is_summoned()
             || mons_is_unique(mons.type)
+            || dcc_is_boss(mons)
             || mons.is_firewood()
             || mons_is_tentacle_or_tentacle_segment(mons.type)
             || !mons_gives_xp(mons, you)

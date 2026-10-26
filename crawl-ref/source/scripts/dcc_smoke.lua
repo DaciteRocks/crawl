@@ -1910,3 +1910,68 @@ local function phase5b()
   check(dcc.box_count() == boxes, "and no box is awarded")
 end
 phase5b()
+
+-- Phase 6a: floor bosses.
+local function phase6a()
+  local function target_count(base)
+    for _, t in ipairs(dcc.quest_kill_targets()) do
+      if t.name == base then
+        return t.count
+      end
+    end
+    return 0
+  end
+  -- A first arrival on the floor by its down stairs: the player stands in
+  -- the safe room, as a real arrival leaves them.
+  local function arrive(place)
+    debug.goto_place(place)
+    test.regenerate_level()
+    dcc.arrival_spot("stairs_i")
+  end
+
+  local floors = dcc.boss_floors()
+  check(#floors == 5, "five floors hold a boss")
+  local zot5 = false
+  for _, b in ipairs(floors) do
+    arrive(b.place)
+    check(dcc.boss_pos() == nil, b.place .. " has no boss before arrival")
+    local before = target_count(b.base)
+    dcc.enter_floor(true)
+    local x, y, name = dcc.boss_pos()
+    check(x ~= nil, b.place .. " holds its boss after the first arrival")
+    check(name == b.name, b.place .. "'s boss is " .. b.name
+          .. " (" .. tostring(name) .. ")")
+    check(not dcc.is_safe_cell(x, y), b.name .. " stands outside the safe room")
+    local m = dgn.mons_at(x, y)
+    check(m ~= nil and not m.wont_attack, b.name .. " is hostile")
+    check(m.get_prop("dcc_boss") == b.place,
+          b.name .. " carries the dcc_boss prop for " .. b.place)
+    check(dcc.boss_count() == 1, b.place .. " holds exactly one boss")
+    check(target_count(b.base) == before,
+          b.name .. " is not a kill quest target")
+    dcc.enter_floor(false)
+    check(dcc.boss_count() == 1, "a revisit of " .. b.place
+          .. " places no second boss")
+    dcc.enter_floor(true)
+    check(dcc.boss_count() == 1, "a rebuild of " .. b.place
+          .. " that keeps its boss places no second one")
+    if b.place == "Zot:5" then
+      zot5 = true
+    end
+  end
+  check(zot5, "Zot:5's boss (the encompass fallback) was checked")
+
+  for _, place in ipairs({ "D:2", "D:4" }) do
+    arrive(place)
+    dcc.enter_floor(true)
+    check(dcc.boss_pos() == nil and dcc.boss_count() == 0,
+          place .. " holds no boss")
+  end
+
+  arrive("D:3")
+  dcc.enter_floor(true)
+  dcc.save_roundtrip()
+  check(dcc.boss_count() == 1 and dcc.boss_pos() ~= nil,
+        "D:3's boss survives a save round trip")
+end
+phase6a()

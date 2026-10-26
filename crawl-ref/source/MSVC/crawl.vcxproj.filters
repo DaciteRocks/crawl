@@ -100,6 +100,9 @@
     <ClCompile Include="..\dcc-achieve.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc-boss.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\dcc-boxes.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1159,6 +1162,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-achieve.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc-boss.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-boxes.h">
