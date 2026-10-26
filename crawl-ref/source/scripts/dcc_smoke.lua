@@ -2726,12 +2726,18 @@ local function phase6g()
         and #dcc.repick_choices() == 0,
         "reset_repick leaves no offer and no re-pick")
 
-  -- No offer off D:3.
-  for _, place in ipairs({ "D:2", "D:4" }) do
+  -- No offer above D:3 or off the Dungeon; a shaft from D:2 past D:3
+  -- still gets it on the first floor below.
+  for _, place in ipairs({ "D:2", "Lair:1" }) do
     build(place)
     dcc.enter_floor(true)
     check(not dcc.repick_pending(), "no re-pick offer on " .. place)
   end
+  build("D:4")
+  dcc.enter_floor(true, "shaft")
+  check(dcc.repick_pending() and #dcc.repick_choices() == 3,
+        "arriving first on D:4 (past D:3) still offers the re-pick")
+  dcc.reset_repick()
 
   -- Declining: tested first, since a re-pick spends the game's one offer.
   build("D:3")
@@ -2815,10 +2821,105 @@ local function phase6g()
   check(dcc.repicked() == choices[1] and not dcc.repick_pending(),
         "the re-pick survives a save round trip")
 
+  dcc.reset_repick()
+  check(you.change_species(race0), "change back to " .. race0)
+
+  -- What an offer may hold. (The player is the original species again.)
+  local function has(list, name)
+    for _, n in ipairs(list) do
+      if n == name then return true end
+    end
+    return false
+  end
+  local god0 = you.god()
+  dcc.set_god("")
+  local pool = dcc.repick_pool()
+  check(not has(pool, race0), "the pool leaves out the player's species")
+  check(not has(pool, "Djinni"), "the pool leaves out the Djinni (no "
+        .. "innate spells after a change)")
+  check(has(pool, "Demigod") and has(pool, "Mummy") and has(pool, "Draconian"),
+        "with no god the pool holds Demigod, Mummy and Draconian")
+  dcc.set_god("Zin")
+  local zin_pool = dcc.repick_pool()
+  check(not has(zin_pool, "Demigod") and not has(zin_pool, "Mummy")
+        and not has(zin_pool, "Ghoul") and not has(zin_pool, "Demonspawn"),
+        "a follower of Zin is offered no Demigod, undead or demonic species")
+  dcc.set_god("Trog")
+  local trog_pool = dcc.repick_pool()
+  check(not has(trog_pool, "Demigod") and has(trog_pool, "Mummy"),
+        "a follower of Trog is offered no Demigod, but may be a Mummy")
+  dcc.set_god("")
+  check(you.change_species("Red Draconian"), "become a Red Draconian")
+  check(not has(dcc.repick_pool(), "Draconian"),
+        "a coloured Draconian is not offered the base Draconian")
+  check(you.change_species(race0), "change back to " .. race0)
+
+  -- Rolls until an offer holds a species Zin refuses (with no god the pool
+  -- has several); nil if 60 rolls never do.
+  local function roll_zin_refused()
+    for _ = 1, 60 do
+      dcc.reset_repick()
+      dcc.repick_roll()
+      for _, c in ipairs(dcc.repick_choices()) do
+        if not has(zin_pool, c) then return c end
+      end
+    end
+    return nil
+  end
+
+  -- Joining a god between the roll and the answer: an incompatible pick is
+  -- refused and the offer stays open.
+  local refused = roll_zin_refused()
+  check(refused ~= nil, "an offer holds a species Zin refuses")
+  dcc.set_god("Zin")
+  mark()
+  check(not dcc.repick(refused), "a follower of Zin cannot re-pick to "
+        .. refused)
+  check(dcc.repick_pending() and you.race() == race0,
+        "the offer stays open and the species stands")
+  check(said("will not have"), "the Announcer says why")
+  dcc.set_god("")
+  check(dcc.repick(refused), "without the god the pick to " .. refused
+        .. " applies")
+  dcc.reset_repick()
+  check(you.change_species(race0), "change back to " .. race0)
+
+  -- A re-pick on the booth floor settles the booth again: a god the new
+  -- body cannot join leaves its altar.
+  build("D:3")
+  dcc.enter_floor(true)
+  local booth = dcc.sponsor_altars()
+  check(#booth >= 1, "D:3 has booth altars (" .. #booth .. ")")
+  local bx, by = booth[1].x, booth[1].y
+  dgn.grid(bx, by, dgn.find_feature_number("altar_zin"))
+  refused = roll_zin_refused()
+  check(refused ~= nil, "an offer holds a species Zin refuses")
+  check(dcc.repick(refused), "the re-pick to " .. refused .. " applies")
+  for _, a in ipairs(dcc.sponsor_altars()) do
+    check(a.god ~= "Zin", "after the re-pick no booth altar is Zin's ("
+          .. a.x .. "," .. a.y .. ": " .. a.god .. ")")
+  end
+  check(dgn.feature_name(dgn.grid(bx, by)) ~= "altar_zin",
+        "the Zin altar was replaced (" .. dgn.feature_name(dgn.grid(bx, by))
+        .. ")")
+  dcc.reset_repick()
+  check(you.change_species(race0), "change back to " .. race0)
+
+  -- Leaving the Felid body leaves its extra lives behind.
+  check(you.change_species("Felid"), "become a Felid")
+  dcc.set_lives(1)
+  check(you.lives() == 1, "the Felid has an extra life")
+  dcc.repick_roll()
+  local to = dcc.repick_choices()[1]
+  check(dcc.repick(to), "the Felid re-picks to " .. to)
+  check(you.lives() == 0, "the " .. to .. " keeps no extra lives ("
+        .. you.lives() .. ")")
+  dcc.reset_repick()
+  dcc.set_god(god0 == "No God" and "" or god0)
+
   -- Put the smoke character back: the original species (its innate
   -- mutations and max HP with it), any worn item that fell away from the
   -- new body, and the HP.
-  dcc.reset_repick()
   check(you.change_species(race0), "change back to " .. race0)
   for _, slot in ipairs(worn0) do
     local it = items.inslot(slot)

@@ -1,7 +1,8 @@
 /**
  * @file
  * @brief Crawl Live (DCC) floor-3 species re-pick: one re-roll per game,
- *        offered on the first arrival at D:3.
+ *        offered on the first arrival at D:3 (or the first Dungeon floor
+ *        below it, after a shaft past D:3).
 **/
 
 #pragma once
@@ -21,6 +22,8 @@
 // How many species an offer holds.
 const int DCC_REPICK_CHOICE_COUNT = 3;
 
+vector<species_type> dcc_repick_pool();
+void dcc_repick_roll();
 void dcc_repick_arrived();
 bool dcc_repick_pending();
 vector<species_type> dcc_repick_choices();
