@@ -112,6 +112,9 @@
     <ClCompile Include="..\dcc-quest.cc">
       <Filter>cc</Filter>
     </ClCompile>
+    <ClCompile Include="..\dcc-repick.cc">
+      <Filter>cc</Filter>
+    </ClCompile>
     <ClCompile Include="..\dcc-room.cc">
       <Filter>cc</Filter>
     </ClCompile>
@@ -1180,6 +1183,9 @@
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-quest.h">
+      <Filter>h</Filter>
+    </ClInclude>
+    <ClInclude Include="..\dcc-repick.h">
       <Filter>h</Filter>
     </ClInclude>
     <ClInclude Include="..\dcc-room.h">

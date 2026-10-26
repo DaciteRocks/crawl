@@ -43,6 +43,7 @@ dcc-boss.o \
 dcc-boxes.o \
 dcc-clock.o \
 dcc-quest.o \
+dcc-repick.o \
 dcc-room.o \
 dcc-safe.o \
 dcc-sponsor.o \
@@ -390,6 +391,7 @@ dcc-boss.h.o \
 dcc-boxes.h.o \
 dcc-clock.h.o \
 dcc-quest.h.o \
+dcc-repick.h.o \
 dcc-room.h.o \
 dcc-safe.h.o \
 dcc-sponsor.h.o \

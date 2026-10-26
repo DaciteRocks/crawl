@@ -2684,3 +2684,159 @@ local function phase6f()
   debug.goto_place("D:1")
 end
 phase6f()
+
+-- Phase 6g: the floor-3 species re-pick, script-driven. The first arrival
+-- at D:3 rolls three starting species other than the player's; taking one
+-- changes the species (trunk's change_species_to()), declining keeps
+-- everything, and either spends the one re-roll for the game.
+local function phase6g()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local function build(place)
+    debug.goto_place(place)
+    test.regenerate_level()
+  end
+  local function worn_slots()
+    local slots = {}
+    for i = 0, 51 do
+      local it = items.inslot(i)
+      if it and it.equipped then slots[#slots + 1] = i end
+    end
+    return slots
+  end
+
+  -- What the re-pick changes, to put back afterwards: the species (and
+  -- with it the innate mutations and the max HP), worn items that fall
+  -- away from the new body, and the HP. The headless character starts
+  -- without its species' innate mutations (a Human has explore regen);
+  -- change_species_to() gives them, so they are put on first and the
+  -- restore below can be compared with that.
+  local race0 = you.race()
+  check(you.change_species(race0), "the " .. race0 .. " gets its innate "
+        .. "mutations")
+  local muts0 = you.mutation_overview()
+  local form0 = you.transform()
+  local hp0, mhp0 = you.hp()
+  local worn0 = worn_slots()
+
+  -- The earlier sections' D:3 arrivals rolled offers of their own.
+  dcc.reset_repick()
+  check(not dcc.repick_pending() and dcc.repicked() == nil
+        and #dcc.repick_choices() == 0,
+        "reset_repick leaves no offer and no re-pick")
+
+  -- No offer off D:3.
+  for _, place in ipairs({ "D:2", "D:4" }) do
+    build(place)
+    dcc.enter_floor(true)
+    check(not dcc.repick_pending(), "no re-pick offer on " .. place)
+  end
+
+  -- Declining: tested first, since a re-pick spends the game's one offer.
+  build("D:3")
+  mark()
+  dcc.enter_floor(true)
+  check(dcc.repick_pending(), "the first arrival at D:3 offers a re-pick")
+  check(not said("Re-rolled") and not said("Keeping the original"),
+        "the offer itself is silent (6i asks)")
+  mark()
+  dcc.repick_decline()
+  check(dcc.repicked() == "declined", "declining records \"declined\"")
+  check(not dcc.repick_pending() and #dcc.repick_choices() == 0,
+        "declining spends the offer")
+  check(said("Keeping the original."), "the Announcer comments on the "
+        .. "decline")
+  check(you.race() == race0, "declining keeps the species (" .. you.race()
+        .. ")")
+  build("D:3")
+  dcc.enter_floor(true)
+  check(not dcc.repick_pending() and dcc.repicked() == "declined",
+        "a declined re-pick is never offered again")
+  dcc.reset_repick()
+
+  -- Taking one.
+  build("D:3")
+  dcc.enter_floor(true)
+  check(dcc.repick_pending(), "D:3 offers a re-pick again after the reset")
+  local choices = dcc.repick_choices()
+  check(#choices == 3, "the offer holds three species (" .. #choices .. ")")
+  check(choices[1] ~= choices[2] and choices[1] ~= choices[3]
+        and choices[2] ~= choices[3],
+        "the three are distinct (" .. table.concat(choices, ", ") .. ")")
+  local function offered(name)
+    for _, c in ipairs(choices) do
+      if c == name then return true end
+    end
+    return false
+  end
+  check(not offered(race0), "none is the player's species (" .. race0 .. ")")
+  local wrong
+  for _, name in ipairs({ "Felid", "Octopode", "Minotaur", "Spriggan" }) do
+    if not wrong and not offered(name) then wrong = name end
+  end
+  check(not dcc.repick(wrong), "a species not on offer (" .. wrong
+        .. ") is refused")
+  check(dcc.repick_pending() and you.race() == race0,
+        "and the offer and the species stand")
+  check(not pcall(dcc.repick, "no such species"),
+        "dcc.repick() of an unknown name is an error")
+
+  mark()
+  check(dcc.repick(choices[1]), "the re-pick to " .. choices[1] .. " applies")
+  check(you.race() == choices[1], "the player is now " .. choices[1] .. " ("
+        .. you.race() .. ")")
+  check(dcc.repicked() == choices[1], "dcc.repicked() names " .. choices[1])
+  check(not dcc.repick_pending() and #dcc.repick_choices() == 0,
+        "the re-pick spends the offer")
+  check(said("Re-rolled. Please welcome the new " .. choices[1] .. "."),
+        "the Announcer welcomes the new " .. choices[1])
+  local hp, mhp = you.hp()
+  check(mhp > 0 and hp > 0, "the " .. choices[1] .. " has HP (" .. hp .. "/"
+        .. mhp .. ")")
+  check(you.xl() >= 1, "the experience level stands (" .. you.xl() .. ")")
+  check(not dcc.repick(choices[2]), "a second re-pick is refused")
+  check(you.race() == choices[1], "and the species stays " .. choices[1])
+  mark()
+  dcc.repick_decline()
+  check(dcc.repicked() == choices[1] and quiet(),
+        "declining a spent offer does nothing")
+
+  -- A revisit, another floor or a reload never re-offers.
+  build("D:3")
+  dcc.enter_floor(true)
+  check(not dcc.repick_pending(), "a new D:3 does not offer again")
+  dcc.enter_floor(false)
+  check(not dcc.repick_pending(), "nor does returning to D:3")
+  build("D:4")
+  dcc.enter_floor(true)
+  check(not dcc.repick_pending(), "nor does D:4")
+  dcc.save_roundtrip()
+  check(dcc.repicked() == choices[1] and not dcc.repick_pending(),
+        "the re-pick survives a save round trip")
+
+  -- Put the smoke character back: the original species (its innate
+  -- mutations and max HP with it), any worn item that fell away from the
+  -- new body, and the HP.
+  dcc.reset_repick()
+  check(you.change_species(race0), "change back to " .. race0)
+  for _, slot in ipairs(worn0) do
+    local it = items.inslot(slot)
+    if it and not it.equipped then
+      it.equip()
+      dcc.run_delays(20)
+    end
+  end
+  check(#worn_slots() == #worn0, "the worn items are back on ("
+        .. #worn_slots() .. " of " .. #worn0 .. ")")
+  dcc.set_hp(hp0)
+  check(you.race() == race0, "the species is restored (" .. you.race() .. ")")
+  check(you.mutation_overview() == muts0, "the mutations are restored ("
+        .. you.mutation_overview() .. " vs " .. muts0 .. ")")
+  check(you.transform() == form0, "the form is unchanged")
+  local hp1, mhp1 = you.hp()
+  print("dcc_smoke: HP after the restore " .. hp1 .. "/" .. mhp1
+        .. " (before " .. hp0 .. "/" .. mhp0 .. ")")
+  debug.goto_place("D:1")
+end
+phase6g()
