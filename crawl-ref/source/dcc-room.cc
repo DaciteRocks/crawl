@@ -53,6 +53,7 @@
 #include "branch.h"
 #include "coord.h"
 #include "coordit.h"
+#include "dcc-theme.h" // dcc_assign_theme
 #include "dlua.h"
 #include "dungeon.h"
 #include "env.h"
@@ -503,10 +504,13 @@ static bool _dig_in_safe_room(const vector<room_shape> &shapes,
 /**
  * Place the floor's safe room, unless it already has one (D:1, where it is
  * the arrival vault). Vetoes the level only if no placement works at all.
+ * First, give the floor its theme (dcc_assign_theme(), dcc-theme.cc): every
+ * connected floor's build makes this call.
  */
 void dcc_place_safe_room()
 {
     ASSERT(crawl_state.game_is_dcc());
+    dcc_assign_theme();
     if (!_wants_safe_room() || _level_has_safe_room())
         return;
 

@@ -2211,3 +2211,75 @@ local function phase6b()
   check(you.set_xl(1), "the player is back to XL 1")
 end
 phase6b()
+
+-- Phase 6c: floor themes, assigned at build time and announced on the
+-- first arrival.
+local function phase6c()
+  local function said(text)
+    return since_mark():gsub("%s+", " "):find(text, 1, true) ~= nil
+  end
+  local ids = {}
+  for _, t in ipairs(dcc.theme_table()) do
+    ids[t.id] = t
+  end
+  check(#dcc.theme_table() == 4, "four floor themes")
+  check(ids.crowd and ids.headliners and ids.reruns and ids.lightning,
+        "the themes are crowd, headliners, reruns and lightning")
+  check(ids.lightning.clock_percent == 60
+        and ids.lightning.floor_colour == "yellow",
+        "the table exports every column (lightning: 60%, yellow)")
+
+  dcc.reset_themes()
+  debug.goto_place("D:1")
+  test.regenerate_level()
+  check(dcc.theme_for("D:1") == nil, "D:1 has no theme")
+  for _, place in ipairs({ "D:2", "D:3", "D:4" }) do
+    debug.goto_place(place)
+    test.regenerate_level()
+    local id = dcc.theme_for(place)
+    check(id ~= nil and ids[id] ~= nil,
+          place .. " is given a theme (" .. tostring(id) .. ")")
+    check(dcc.theme_for() == id, "theme_for() defaults to the current level")
+  end
+  check(dcc.theme_for("D:3") ~= dcc.theme_for("D:2"),
+        "D:3's theme differs from D:2's")
+  check(dcc.theme_for("D:4") ~= dcc.theme_for("D:3"),
+        "D:4's theme differs from D:3's")
+
+  local d3 = dcc.theme_for("D:3")
+  debug.goto_place("D:3")
+  test.regenerate_level()
+  check(dcc.theme_for("D:3") == d3, "a rebuilt D:3 keeps its theme")
+  dcc.save_roundtrip()
+  check(dcc.theme_for("D:3") == d3, "the theme survives a save round trip")
+
+  mark()
+  dcc.arrival_spot("stairs_i")
+  dcc.enter_floor(true)
+  check(said("Tonight's floor: " .. ids[d3].name .. ". " .. ids[d3].blurb),
+        "the Announcer names D:3's theme on the first arrival")
+  local summary = dcc.floor_clock_summary()
+  check(summary:find("Theme: " .. ids[d3].name .. ".", 1, true) ~= nil,
+        "the floor clock summary names the theme (" .. summary .. ")")
+
+  debug.goto_place("D:1")
+  mark()
+  dcc.enter_floor(true)
+  check(not said("Tonight's floor"), "the Announcer names no theme on D:1")
+  check(dcc.floor_clock_summary():find("Theme:", 1, true) == nil,
+        "D:1's floor clock summary names no theme")
+
+  debug.goto_place("Abyss:1")
+  check(dcc.theme_for() == nil and dcc.theme_for("Abyss:1") == nil,
+        "the Abyss has no theme")
+
+  dcc.set_theme("D:5", "reruns")
+  debug.goto_place("D:5")
+  test.regenerate_level()
+  check(dcc.theme_for("D:5") == "reruns", "a floor keeps a theme set before "
+        .. "its build")
+  check(not pcall(dcc.set_theme, "D:6", "nonsense"),
+        "set_theme refuses an unknown theme")
+  debug.goto_place("D:1")
+end
+phase6c()

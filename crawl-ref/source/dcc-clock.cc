@@ -23,6 +23,7 @@
 #include "dcc-achieve.h"
 #include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
+#include "dcc-theme.h" // dcc_announce_theme, dcc_theme_summary
 #include "message.h"
 #include "notes.h"
 #include "player.h"
@@ -297,8 +298,9 @@ static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
 /**
  * The player has arrived on a level (files.cc load_level(), whenever the
  * arrival makes changes): run the floor clock's arrival logic, settle the
- * fetch quest of the floor left behind when this is a new floor, place a
- * new connected floor's boss if it has one (dcc_place_boss()), then check
+ * fetch quest of the floor left behind when this is a new floor, announce
+ * a new connected floor's theme (dcc_announce_theme()) and place its boss
+ * if it has one (dcc_place_boss()), then check
  * the achievements (a floor reached, a floor left early). Unlocks from one
  * arrival interrupt the player once.
  *
@@ -325,7 +327,10 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
         dcc_quest_floor_left(old_place);
     }
     if (just_created && is_connected_branch(here))
+    {
+        dcc_announce_theme();
         dcc_place_boss();
+    }
     dcc_check_achievements();
 }
 
@@ -562,9 +567,10 @@ string dcc_floor_clock_summary()
     {
         return make_stringf("There is no floor below. In %d turns the strain "
                             "tears at your life force again, unless you "
-                            "leave.", left);
+                            "leave.", left) + dcc_theme_summary();
     }
-    return make_stringf("This floor collapses in %d turns.", left);
+    return make_stringf("This floor collapses in %d turns.", left)
+           + dcc_theme_summary();
 }
 
 void dcc_set_floor_turns_left(int turns)
