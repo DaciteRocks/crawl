@@ -163,3 +163,8 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
   `dungeon_events.clear()` then `activate_all()` re-registers listeners.
   The des global prelude (`crawl_require('dlua/dcc.lua')`) runs at startup
   (`run_map_global_preludes()`), so the callback exists when a save loads.
+- (Phase 6e) A placed vault's Lua markers answer `property()` during the
+  level build, straight after `dgn_place_map()` returns (a `props_marker`
+  read by `env.markers.property_at()` found all three booth cells on every
+  D:3 build); `dcc-room.cc` `_booth_cells()` keeps the map-lines fallback
+  but it has not been needed.

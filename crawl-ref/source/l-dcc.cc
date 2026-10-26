@@ -1697,6 +1697,29 @@ LUAFN(dcc_monster_counts_lua)
     return 1;
 }
 
+/*** The D:3 sponsor booth's altars on the current level (dcc_sponsor_altars(),
+ * dcc-room.cc): booth cells that hold an altar, with the altar's god.
+ * @treturn table array of { x=, y=, god= } (god as god_name() gives it)
+ * @function sponsor_altars
+ */
+LUAFN(dcc_sponsor_altars_lua)
+{
+    lua_newtable(ls);
+    int i = 0;
+    for (const auto &altar : dcc_sponsor_altars())
+    {
+        lua_newtable(ls);
+        lua_pushinteger(ls, altar.first.x);
+        lua_setfield(ls, -2, "x");
+        lua_pushinteger(ls, altar.first.y);
+        lua_setfield(ls, -2, "y");
+        lua_pushstring(ls, god_name(altar.second).c_str());
+        lua_setfield(ls, -2, "god");
+        lua_rawseti(ls, -2, ++i);
+    }
+    return 1;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1786,6 +1809,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "level_colours", dcc_level_colours_lua },
 { "monster_counts", dcc_monster_counts_lua },
 { "apply_theme_build", dcc_apply_theme_build_lua },
+{ "sponsor_altars", dcc_sponsor_altars_lua },
 { nullptr, nullptr }
 };
 

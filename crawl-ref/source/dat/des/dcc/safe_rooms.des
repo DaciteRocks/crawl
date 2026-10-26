@@ -136,3 +136,125 @@ x.....x
 x.1..[x
 xxxxxxx
 ENDMAP
+
+###############################################################################
+# The sponsor booth (D:3 only; dcc-room.cc picks the dcc_sponsor_room tag
+# there and dcc_safe_room everywhere else). Larger variants of the same room,
+# same rules as above, with three booth cells (A) in a row along the wall
+# opposite the door. Each A carries the dcc_sponsor prop; once the room is
+# placed, dcc-room.cc turns them into altars of three distinct temple gods
+# the player could join (a cell left over stays floor). The altars are
+# ordinary altars. The names start with dcc_safe_room like the others.
+###############################################################################
+
+# Door to the south.
+NAME:   dcc_safe_room_sponsor_a
+TAGS:   dcc_sponsor_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KFEAT:  A = floor
+KPROP:  .{([SK1A = dcc_safe
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MARKER: A = lua:props_marker { dcc_sponsor = "1" }
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
+MAP
+xxxxxxxxxxx
+x..A.A.A..x
+x.........x
+x{...S...(x
+x..1......x
+x[.....K..x
+xxxxx+xxxxx
+ENDMAP
+
+# Door to the north.
+NAME:   dcc_safe_room_sponsor_b
+TAGS:   dcc_sponsor_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KFEAT:  A = floor
+KPROP:  .{([SK1A = dcc_safe
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MARKER: A = lua:props_marker { dcc_sponsor = "1" }
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
+MAP
+xxxxx+xxxxx
+x.........x
+x{..K....(x
+x.....S...x
+x[......1.x
+x..A.A.A..x
+xxxxxxxxxxx
+ENDMAP
+
+# Door to the east.
+NAME:   dcc_safe_room_sponsor_c
+TAGS:   dcc_sponsor_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KFEAT:  A = floor
+KPROP:  .{([SK1A = dcc_safe
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MARKER: A = lua:props_marker { dcc_sponsor = "1" }
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
+MAP
+xxxxxxxxxxx
+xA..{...S.x
+x.........x
+xA..(..K..+
+x.........x
+xA..[...1.x
+xxxxxxxxxxx
+ENDMAP
+
+# Door to the west.
+NAME:   dcc_safe_room_sponsor_d
+TAGS:   dcc_sponsor_room dcc_only allow_dup no_monster_gen no_tele_into
+TAGS:   no_trap_gen no_item_gen no_mimic no_pool_fixup no_wall_fixup
+TAGS:   no_rotate no_hmirror no_vmirror transparent
+ORIENT: float
+KFEAT:  S = general shop count:8 name:Commissary type:Store
+KFEAT:  K = floor
+KFEAT:  A = floor
+KPROP:  .{([SK1A = dcc_safe
+MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MARKER: A = lua:props_marker { dcc_sponsor = "1" }
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
+epilogue{{
+  dcc_quest_setup(_G)
+}}
+MAP
+xxxxxxxxxxx
+x.S...{..Ax
+x.........x
++..K..(..Ax
+x.........x
+x.1...[..Ax
+xxxxxxxxxxx
+ENDMAP

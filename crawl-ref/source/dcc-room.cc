@@ -64,9 +64,16 @@
 #include "maps.h"
 #include "player.h"
 #include "random.h"
+#include "religion.h" // temple_god_list, player_can_join_god
 #include "terrain.h"
 
 static const string SAFE_ROOM_TAG = "dcc_safe_room";
+// D:3's larger variants, with the sponsor booth (Phase 6e).
+static const string SPONSOR_ROOM_TAG = "dcc_sponsor_room";
+// The marker prop on a booth cell (safe_rooms.des), and its glyph.
+static const string SPONSOR_PROP = "dcc_sponsor";
+static const char SPONSOR_GLYPH = 'A';
+static const int SPONSOR_ALTARS = 3;
 
 /// Does this floor of a DCC game get a safe room? The Tomb is left out: it
 /// has no stairs (hatches only), and Descent never generates it anyway.
@@ -83,11 +90,20 @@ static bool _seen_by_connectivity(const coord_def &c)
     return map_masked(c, MMT_PASSABLE) || !map_masked(c, MMT_OPAQUE);
 }
 
-/// Is a safe-room vault already placed on the level being built?
+/// The tag of the safe-room variants this floor uses: D:3 gets the sponsor
+/// booth variants, every other floor the plain ones.
+static string _room_tag()
+{
+    return level_id::current() == level_id(BRANCH_DUNGEON, 3)
+           ? SPONSOR_ROOM_TAG : SAFE_ROOM_TAG;
+}
+
+/// Is a safe-room vault (of either kind) already placed on the level being
+/// built?
 static bool _level_has_safe_room()
 {
     for (const auto &vp : env.level_vaults)
-        if (vp->map.has_tag(SAFE_ROOM_TAG))
+        if (vp->map.has_tag(SAFE_ROOM_TAG) || vp->map.has_tag(SPONSOR_ROOM_TAG))
             return true;
     return false;
 }
@@ -141,11 +157,14 @@ namespace
         coord_def outward;    // from the door to the cell outside it
     };
 
-    // _room_shapes()'s cache: the names of every map tagged dcc_safe_room
-    // when it was filled, and the usable shapes among them.
-    vector<string> shape_names;
-    vector<room_shape> shape_cache;
-    bool shapes_cached = false;
+    // _room_shapes()'s cache, one entry per tag: the names of every map
+    // carrying the tag when it was filled, and the usable shapes among them.
+    struct shape_cache_entry
+    {
+        vector<string> names;
+        vector<room_shape> shapes;
+    };
+    map<string, shape_cache_entry> shape_caches;
 }
 
 /// Read one variant's geometry from its map lines; false if unusable.
@@ -191,36 +210,38 @@ static bool _read_room_shape(const map_def *mdef, room_shape &shape)
 }
 
 /**
- * The usable safe-room variants. Reading them runs each map's Lua, so the
- * result is cached for the process. The cache holds while the same maps
- * (by name, in order) carry the tag; their map_def pointers are refreshed
+ * The usable safe-room variants with this tag. Reading them runs each map's
+ * Lua, so the result is cached for the process, per tag. The cache holds
+ * while the same maps (by name, in order) carry the tag; their map_def
+ * pointers are refreshed
  * on every call, because reread_maps() (a des file changed under a running
  * game) rebuilds every definition. A reread that changes a variant's lines
  * under the same name is caught when the placed vault does not match its
  * cached shape (_dig_in_safe_room()), which empties the cache.
  */
-static vector<room_shape> _room_shapes()
+static vector<room_shape> _room_shapes(const string &tag)
 {
-    const mapref_vector maps = find_maps_for_tag(SAFE_ROOM_TAG, false, false);
+    const mapref_vector maps = find_maps_for_tag(tag, false, false);
     vector<string> names;
     for (const map_def *mdef : maps)
         names.push_back(mdef->name);
 
-    if (!shapes_cached || names != shape_names)
+    auto cached = shape_caches.find(tag);
+    if (cached == shape_caches.end() || names != cached->second.names)
     {
-        shape_cache.clear();
+        shape_cache_entry &entry = shape_caches[tag];
+        entry.shapes.clear();
         for (const map_def *mdef : maps)
         {
             room_shape shape;
             if (_read_room_shape(mdef, shape))
-                shape_cache.push_back(shape);
+                entry.shapes.push_back(shape);
         }
-        shape_names = names;
-        shapes_cached = true;
-        return shape_cache;
+        entry.names = names;
+        return entry.shapes;
     }
 
-    vector<room_shape> shapes = shape_cache;
+    vector<room_shape> shapes = cached->second.shapes;
     for (room_shape &shape : shapes)
         for (const map_def *mdef : maps)
             if (mdef->name == shape.map->name)
@@ -231,9 +252,7 @@ static vector<room_shape> _room_shapes()
 /// Forget the cached shapes; the next _room_shapes() call rereads them.
 static void _forget_room_shapes()
 {
-    shapes_cached = false;
-    shape_names.clear();
-    shape_cache.clear();
+    shape_caches.clear();
 }
 
 namespace
@@ -420,14 +439,14 @@ static bool _keeps_trunk_zones(const room_spot &spot, int zones_before)
  * such as an encompass map), so it is not counted as an area of its own.
  *
  * @param rules  What this pass may dig into, and where the door may open.
- * @return whether a room was placed.
+ * @return the room's placement, nullptr if none was placed.
  */
-static bool _dig_in_safe_room(const vector<room_shape> &shapes,
-                              const dig_rules &rules,
-                              const level_survey &survey)
+static const vault_placement *_dig_in_safe_room(
+    const vector<room_shape> &shapes, const dig_rules &rules,
+    const level_survey &survey)
 {
     if (!survey.main)
-        return false;
+        return nullptr;
 
     vector<room_spot> spots;
     for (const room_shape &shape : shapes)
@@ -468,14 +487,14 @@ static bool _dig_in_safe_room(const vector<room_shape> &shapes,
         if (!check || _keeps_trunk_zones(spots[i], survey.trunk_zones))
             pick = &spots[i];
     if (!pick)
-        return false;
+        return nullptr;
 
     // A float vault given a position is centred on it: start = pos - size/2.
     const room_shape &shape = *pick->shape;
     const coord_def centre = pick->corner + shape.size / 2;
     const vault_placement *vp = dgn_place_map(shape.map, false, true, centre);
     if (!vp)
-        return false;
+        return nullptr;
 
     // The vault is written by now, so a mismatch cannot be undone by trying
     // another spot: a second room would follow. It only happens if the map
@@ -498,7 +517,68 @@ static bool _dig_in_safe_room(const vector<room_shape> &shapes,
         else
             env.level_map_mask(*vi) |= MMT_OPAQUE;
     }
-    return true;
+    return vp;
+}
+
+/// The booth cells of a placed room: the cells whose marker carries the
+/// dcc_sponsor prop, or, if no marker answers, the booth glyphs of the
+/// room's map lines.
+static vector<coord_def> _booth_cells(const vault_placement &vp)
+{
+    vector<coord_def> cells;
+    for (vault_place_iterator vi(vp); vi; ++vi)
+        if (env.markers.property_at(*vi, MAT_ANY, SPONSOR_PROP) == "1")
+            cells.push_back(*vi);
+    if (!cells.empty())
+        return cells;
+
+    const vector<string> &lines = vp.map.map.get_lines();
+    for (int y = 0; y < (int)lines.size(); ++y)
+        for (int x = 0; x < (int)lines[y].size(); ++x)
+            if (lines[y][x] == SPONSOR_GLYPH)
+                cells.push_back(vp.pos + coord_def(x, y));
+    return cells;
+}
+
+/**
+ * Turn a sponsor room's booth cells into altars of distinct temple gods the
+ * player could join, other than their own; a cell left over, when too few
+ * qualify, stays floor. Rolled with the builder's RNG. Does nothing for a
+ * plain safe room.
+ */
+static void _fill_sponsor_booth(const vault_placement &vp)
+{
+    if (!vp.map.has_tag(SPONSOR_ROOM_TAG))
+        return;
+
+    vector<god_type> pool;
+    for (god_type god : temple_god_list())
+        if (god != you.religion && player_can_join_god(god, false))
+            pool.push_back(god);
+    shuffle_array(pool);
+
+    const vector<coord_def> cells = _booth_cells(vp);
+    for (int i = 0; i < (int)cells.size() && i < (int)pool.size()
+                    && i < SPONSOR_ALTARS; ++i)
+    {
+        env.grid(cells[i]) = altar_for_god(pool[i]);
+    }
+}
+
+/**
+ * The sponsor booth's altars on the current level: every booth cell (its
+ * marker carries the dcc_sponsor prop) that holds an altar, with its god.
+ */
+vector<pair<coord_def, god_type>> dcc_sponsor_altars()
+{
+    vector<pair<coord_def, god_type>> altars;
+    for (map_marker *mark : env.markers.get_all(SPONSOR_PROP, "1"))
+    {
+        const dungeon_feature_type feat = env.grid(mark->pos);
+        if (feat_is_altar(feat))
+            altars.emplace_back(mark->pos, feat_altar_god(feat));
+    }
+    return altars;
 }
 
 /**
@@ -514,7 +594,8 @@ void dcc_place_safe_room()
     if (!_wants_safe_room() || _level_has_safe_room())
         return;
 
-    const vector<room_shape> shapes = _room_shapes();
+    const string tag = _room_tag();
+    const vector<room_shape> shapes = _room_shapes(tag);
     if (shapes.empty())
         throw dgn_veto_exception("Crawl Live: no usable safe-room vault.");
 
@@ -534,16 +615,25 @@ void dcc_place_safe_room()
         { true,  false, true,  true  },
     };
     for (const dig_rules &rules : passes)
-        if (_dig_in_safe_room(shapes, rules, survey))
+        if (const vault_placement *vp = _dig_in_safe_room(shapes, rules,
+                                                          survey))
+        {
+            _fill_sponsor_booth(*vp);
             return;
+        }
 
     // Nothing fits: place it like any secondary vault, connected by a dug
     // corridor.
     for (int tries = 0; tries < 10; ++tries)
     {
-        const map_def *mdef = random_map_for_tag(SAFE_ROOM_TAG, false, false);
-        if (mdef && dgn_place_map(mdef, true, false))
+        const map_def *mdef = random_map_for_tag(tag, false, false);
+        if (!mdef)
+            continue;
+        if (const vault_placement *vp = dgn_place_map(mdef, true, false))
+        {
+            _fill_sponsor_booth(*vp);
             return;
+        }
     }
     const string primary = env.level_vaults.empty()
                            ? "no vault" : env.level_vaults[0]->map.name;
