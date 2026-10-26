@@ -1496,6 +1496,32 @@ local function phase5a()
         "force_complete() awards the box and marks the quest done")
   check(not dcc_quest_debug().force_complete(), "and only once")
 
+  -- A target lost without the player's credit lowers what the quest asks
+  -- for, so it stays winnable; with none left to hunt it completes.
+  clear_monsters()
+  local trio = {}
+  for i = 1, 3 do
+    local c = cells[2 + i * 4]
+    local m = dgn.create_monster(c.x, c.y, "goblin")
+    check(m ~= nil, "goblin " .. i .. " of three is placed")
+    local gx, gy = mpos(m)
+    table.insert(trio, { x = gx, y = gy })
+  end
+  dcc_quest_debug().setup("kill")
+  q = dcc.quest_state()
+  check(q.target == "goblin" and q.need == 3, "a kill quest for all three")
+  mark()
+  dcc.remove_monster(trio[1].x, trio[1].y, "banished")
+  check(q.need == 2 and q.have == 0 and not q.done,
+        "a banished goblin lowers the count to the two left")
+  check(said("Only 2 goblins left to hunt"), "and the Announcer says so")
+  boxes = dcc.box_count()
+  check(dcc.kill(trio[2].x, trio[2].y), "the player kills a goblin")
+  check(q.have == 1 and not q.done, "one of two")
+  dcc.remove_monster(trio[3].x, trio[3].y, "reset")
+  check(q.done and dcc.box_count() == boxes + 1,
+        "the last goblin leaving without credit completes the quest")
+
   -- Reach: a far plain floor cell outside the safe room; stepping
   -- elsewhere does nothing, standing on it completes the quest.
   dcc_quest_debug().setup("reach")
@@ -1582,8 +1608,9 @@ local function phase5a()
   for i = 1, 14 do
     dcc.fire_turn(100)
   end
-  check(not q.done, "149 turns: not yet")
-  dcc.fire_turn(100)
+  dcc.fire_turn(99)
+  check(q.have_aut == 1499 and not q.done, "1499 aut: not yet")
+  dcc.fire_turn(1)
   check(q.done and dcc.box_count() == boxes + 1,
         "150 turns above half health complete the quest")
 

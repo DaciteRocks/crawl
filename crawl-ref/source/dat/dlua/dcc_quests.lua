@@ -11,9 +11,15 @@
 -- the Floor Steward's offer.
 --
 -- Kinds:
---   kill    kill N of a monster type that lives on this floor, by the player
---           or an ally (DET_MONSTER_DIED; dcc.quest_kill_name() says whether
---           a death counts, by the achievements' kill rule)
+--   kill    kill N of a monster type that lives on this floor, outside its
+--           vaults, by the player or an ally (DET_MONSTER_DIED;
+--           dcc.quest_kill_name() says whether a death counts, by the
+--           achievements' kill rule). N never exceeds the kills made plus
+--           the targets still on the floor: after any death, and on
+--           arriving back on the floor, the quest recounts them, so a
+--           target lost without credit (a trap, another monster, a
+--           banishment, a polymorph, one that followed the player away)
+--           lowers N, and with none left the quest completes
 --   fetch   pick up a flagged item placed on a far floor cell
 --           (DET_ITEM_PICKUP at that cell); if the item went astray (a
 --           monster picked it up), holding it when the player arrives on a
@@ -162,6 +168,18 @@ function builders.kill(band, kx, ky, place)
                   .. " and a " .. band.tier .. " box is yours." }
 end
 
+-- How many live hostiles of the kill quest's target are on the floor, not
+-- counting the monster with mid exclude_mid (one whose death is being
+-- heard).
+local function kill_targets_left(q, exclude_mid)
+  for _, target in ipairs(dcc.quest_kill_targets(exclude_mid)) do
+    if target.name == q.target then
+      return target.count
+    end
+  end
+  return 0
+end
+
 function builders.fetch(band, kx, ky, place)
   local x, y = dcc.quest_spot(kx, ky, DCC_QUEST_FETCH_PERCENT)
   if not x then
@@ -212,6 +230,27 @@ local function complete_quest(q, place)
   dcc.quest_reward(q.tier)
 end
 
+-- Keep a kill quest winnable: it never asks for more than the kills made
+-- plus the targets still on the floor. With none left to hunt, it is
+-- complete.
+local function recount_kill_quest(q, place, exclude_mid)
+  local cap = q.have + kill_targets_left(q, exclude_mid)
+  if cap >= q.need then
+    return
+  end
+  q.need = cap
+  if q.have >= q.need then
+    dcc.announce("No " .. q.plural .. " left to hunt on this floor. We'll"
+                 .. " call that a win.")
+    complete_quest(q, place)
+    return
+  end
+  local left = q.need - q.have
+  dcc.announce("Only " .. left .. " "
+               .. (left == 1 and q.target or q.plural)
+               .. " left to hunt on this floor. That will do.")
+end
+
 ------------------------------------------------------------------------------
 -- DccQuestMarker: tracks one floor's quest. It holds only the place name;
 -- the state lives in dgn.persist (see the top of this file).
@@ -236,6 +275,7 @@ function DccQuestMarker:activate(marker, verbose)
   end
   if q.kind == "kill" then
     dgn.register_listener(dgn.dgn_event_type("monster_dies"), marker)
+    dgn.register_listener(dgn.dgn_event_type("entered_level"), marker)
   elseif q.kind == "survive" then
     dgn.register_listener(dgn.dgn_event_type("turn"), marker)
   elseif q.kind == "reach" then
@@ -254,16 +294,19 @@ function DccQuestMarker:event(marker, ev)
   end
   local t = ev:type()
   if q.kind == "kill" and t == dgn.dgn_event_type("monster_dies") then
-    if dcc.quest_kill_name(ev:arg1()) ~= q.target then
-      return
-    end
-    q.have = q.have + 1
-    if q.have >= q.need then
-      complete_quest(q, self.place)
-    else
+    local mid = ev:arg1()
+    if dcc.quest_kill_name(mid) == q.target then
+      q.have = q.have + 1
+      if q.have >= q.need then
+        complete_quest(q, self.place)
+        return
+      end
       dcc.announce(q.have .. " of " .. q.need .. " " .. q.plural
                    .. " down. Keep going.")
     end
+    recount_kill_quest(q, self.place, mid)
+  elseif q.kind == "kill" and t == dgn.dgn_event_type("entered_level") then
+    recount_kill_quest(q, self.place, nil)
   elseif q.kind == "survive" and t == dgn.dgn_event_type("turn") then
     local hp, mhp = you.hp()
     if hp * 2 < mhp then

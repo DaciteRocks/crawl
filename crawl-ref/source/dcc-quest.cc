@@ -114,23 +114,29 @@ bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot)
 /**
  * The monster types a kill quest could ask for on the current level, with
  * how many of each it holds: hostile monsters that would give the player XP,
- * outside the safe room, and not uniques (floor bosses are Phase 6a's),
- * summons, firewood or tentacles. Sorted by type, so the choice from it is
- * reproducible.
+ * outside vaults and the safe room, and not uniques (floor bosses are Phase
+ * 6a's), summons, firewood or tentacles. Sorted by type, so the choice from
+ * it is reproducible. The kill quest also recounts its target with this, so
+ * it can stay winnable.
+ *
+ * @param exclude A monster not to count: the one whose death is being
+ *                heard (it is still on the level when the event fires).
  */
-vector<dcc_kill_target> dcc_quest_kill_targets()
+vector<dcc_kill_target> dcc_quest_kill_targets(mid_t exclude)
 {
     map<monster_type, int> counts;
     for (monster_iterator mi; mi; ++mi)
     {
         const monster &mons = **mi;
-        if (mons.wont_attack() || mons.neutral()
+        if (mons.mid == exclude
+            || mons.wont_attack() || mons.neutral()
             || mons.is_summoned()
             || mons_is_unique(mons.type)
             || mons.is_firewood()
             || mons_is_tentacle_or_tentacle_segment(mons.type)
             || !mons_gives_xp(mons, you)
-            || is_dcc_safe_cell(mons.pos()))
+            || is_dcc_safe_cell(mons.pos())
+            || map_masked(mons.pos(), MMT_VAULT))
         {
             continue;
         }

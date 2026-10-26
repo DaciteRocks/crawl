@@ -28,7 +28,7 @@ struct dcc_kill_target
 };
 
 bool dcc_quest_spot(const coord_def &from, int percent, coord_def &spot);
-vector<dcc_kill_target> dcc_quest_kill_targets();
+vector<dcc_kill_target> dcc_quest_kill_targets(mid_t exclude = MID_NOBODY);
 void dcc_quest_kill_counted(const monster &mons);
 monster_type dcc_quest_kill_type(int mid);
 void dcc_quest_reward(dcc_box_tier tier);
