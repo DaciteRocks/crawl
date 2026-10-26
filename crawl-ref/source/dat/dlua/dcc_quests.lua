@@ -4,11 +4,19 @@
 -- Every connected-branch floor of a Crawl Live game has one quest. The safe
 -- room's epilogue (dat/des/dcc/safe_rooms.des) calls dcc_quest_setup() on
 -- the player's first arrival, once the floor is fully built and the player
--- is on it: it picks the quest kind by depth (DCC_QUEST_BANDS), the
--- Announcer states it, and a DccQuestMarker at the kiosk listens for the
--- dungeon events that advance it. Completing a quest awards a loot box.
--- Accepting is automatic (every quest is active on arrival); Phase 5b adds
--- the Floor Steward's offer.
+-- is on it: it picks the quest kind by depth (DCC_QUEST_BANDS) and places
+-- a DccQuestMarker at the kiosk, which listens for the dungeon events that
+-- advance it once the quest is accepted. Completing a quest awards a loot
+-- box.
+--
+-- The offer: the safe room's Floor Steward (a good neutral human that keeps
+-- its post) has a function_in_los marker. When the player first sees it,
+-- and has control (dcc-quest.cc dcc_quest_before_command()), the Announcer
+-- introduces it, states the quest, and asks (dcc_quest_offer()).
+-- Accepting starts the marker's listeners; declining leaves the floor with
+-- no quest; either way the offer is made once. Killing the steward voids
+-- the quest (dcc_quest_steward_died()). A floor whose room has no steward
+-- gets its quest active at once.
 --
 -- Kinds:
 --   kill    kill N of a monster type that lives on this floor, outside its
@@ -29,6 +37,10 @@
 --   survive spend N turns off the safe room's cells without HP dropping
 --           below half; dropping below half starts the count over
 --           (DET_TURN_ELAPSED)
+--
+-- Offer fields of a quest's state: offered (asked, or active without a
+-- steward), accepted, declined, voided (the steward died first). Only an
+-- accepted quest that is not done, expired or voided is live.
 --
 -- State: dgn.persist.dcc_quests[place], place being the floor's
 -- level_id::describe() ("D:3"). dgn.persist is saved with the player, not
@@ -79,6 +91,12 @@ end
 -- The quest state of a floor (by place name), or nil.
 function dcc_quest_state_at(place)
   return quest_table()[place]
+end
+
+-- Is a quest being tracked: accepted, and not done, expired or voided?
+local function live(q)
+  return q ~= nil and q.accepted and not q.done and not q.expired
+         and not q.voided
 end
 
 local function band_for(depth)
@@ -270,7 +288,7 @@ end
 
 function DccQuestMarker:activate(marker, verbose)
   local q = self:state()
-  if not q or q.done or q.expired then
+  if not live(q) then
     return
   end
   if q.kind == "kill" then
@@ -289,7 +307,7 @@ end
 
 function DccQuestMarker:event(marker, ev)
   local q = self:state()
-  if not q or q.done or q.expired then
+  if not live(q) then
     return
   end
   local t = ev:type()
@@ -365,6 +383,26 @@ local function quest_marker(place)
   return dgn.find_markers_by_prop(DCC_QUEST_MARKER_PROP, place)[1]
 end
 
+-- Accept a floor's quest (on the current level): the marker starts
+-- listening (this arrival's markers are already active, so it is started
+-- here), and a kill quest recounts its targets, since kills made before
+-- accepting did not count. state_it: the Announcer states the quest (it
+-- was not offered first).
+local function accept_quest(q, place, state_it)
+  q.accepted = true
+  -- activate() reads only the place; the marker itself is the one the
+  -- level holds.
+  DccQuestMarker:new(place):activate(quest_marker(place), false)
+  if state_it then
+    dcc.announce(q.text)
+  else
+    dcc.announce("Quest accepted. The cameras are on you.")
+  end
+  if q.kind == "kill" then
+    recount_kill_quest(q, place, nil)
+  end
+end
+
 ------------------------------------------------------------------------------
 -- Entry points.
 
@@ -405,13 +443,60 @@ function dcc_quest_setup(e, forced_kind)
   q.tier = band.tier
   q.done = false
   q.expired = false
+  q.offered = false
+  q.accepted = false
+  q.declined = false
+  q.voided = false
   quest_table()[place] = q
 
-  local m = DccQuestMarker:new(place)
-  dgn.register_lua_marker(kx, ky, m)
-  -- This arrival's markers are already active, so start this one here.
-  m:activate(quest_marker(place), false)
+  dgn.register_lua_marker(kx, ky, DccQuestMarker:new(place))
+  -- Without a steward to offer it, the quest is active at once.
+  if not dcc.prepare_steward() then
+    q.offered = true
+    accept_quest(q, place, true)
+  end
+end
+
+-- The Floor Steward's offer of the current floor's quest, made once: the
+-- Announcer introduces the steward and states the quest, then asks.
+-- answer true or false skips the question (scripts); nil asks with
+-- crawl.yesno (dcc-quest.cc dcc_quest_before_command() calls it so).
+-- Returns whether the quest was accepted.
+function dcc_quest_offer(place, answer)
+  local q = dcc_quest_state_at(place)
+  if not q or q.offered or q.voided or q.done or q.expired
+     or place ~= you.where() then
+    return false
+  end
+  q.offered = true
+  dcc.announce("Say hello to the Floor Steward, our friendly quest giver."
+               .. " This floor's quest, if you want it:")
   dcc.announce(q.text)
+  if answer == nil then
+    answer = crawl.yesno("Accept the Floor Steward's quest?", true, "n")
+  end
+  if answer then
+    accept_quest(q, place, false)
+  else
+    q.declined = true
+    dcc.announce("Quest declined. The Floor Steward shrugs; no quest for"
+                 .. " you on this floor.")
+  end
+  return answer and true or false
+end
+
+-- A floor's Floor Steward died (dcc-quest.cc dcc_steward_died(), for any
+-- death): an unfinished quest is void, accepted or not.
+function dcc_quest_steward_died(place)
+  local q = dcc_quest_state_at(place)
+  if not q or q.done or q.voided then
+    dcc.announce("You killed the Floor Steward. The viewers are appalled."
+                 .. " The ratings, however, are up.")
+    return
+  end
+  q.voided = true
+  dcc.announce("You killed the Floor Steward. That's this floor's quest"
+               .. " gone, genius. The viewers loved it.")
 end
 
 -- The player has arrived on a new floor, leaving place behind
@@ -419,7 +504,7 @@ end
 -- there. Holding the item completes it; otherwise it expires silently.
 function dcc_quest_floor_left(place)
   local q = dcc_quest_state_at(place)
-  if not q or q.kind ~= "fetch" or q.done or q.expired then
+  if not live(q) or q.kind ~= "fetch" then
     return
   end
   if held_quest_item(place) then
@@ -444,5 +529,10 @@ function dcc_quest_debug()
       return false
     end,
     marker = function() return quest_marker(place) end,
+    -- The steward's offer with a forced answer (no question asked).
+    accept = function() return dcc_quest_offer(place, true) end,
+    decline = function() return dcc_quest_offer(place, false) end,
+    -- Is the quest accepted and still being tracked?
+    active = function() return live(dcc_quest_state_at(place)) end,
   }
 end

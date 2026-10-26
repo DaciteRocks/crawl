@@ -51,6 +51,7 @@
 #include "dbg-scan.h"
 #include "dbg-util.h"
 #include "dcc-clock.h" // dcc_floor_clock_summary
+#include "dcc-quest.h" // dcc_quest_before_command
 #include "delay.h"
 #include "describe-god.h"
 #include "describe.h"
@@ -1226,6 +1227,9 @@ static void _input()
     }
 
     ASSERT(!you.turn_is_over);
+
+    if (crawl_state.game_is_dcc())
+        dcc_quest_before_command();
 
     crawl_state.check_term_size();
     if (crawl_state.terminal_resized)

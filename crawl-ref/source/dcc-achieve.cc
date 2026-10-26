@@ -455,11 +455,23 @@ static void _track_kill_streak()
  * @param counted   Whether trunk counts it as a real kill that gives XP: not
  *                  a summon, timeout, reset, tentacle segment or banishment,
  *                  and mons_gives_xp().
+ *
+ * Every death comes here, counted or not, so the Floor Steward's is seen
+ * whatever killed it.
  */
 void dcc_monster_killed(const monster &mons, killer_type killer,
                         bool pet_kill, bool counted)
 {
-    if (!crawl_state.game_is_dcc() || !counted)
+    if (!crawl_state.game_is_dcc())
+        return;
+    // The Floor Steward is no kill, however it died: it voids its floor's
+    // quest instead.
+    if (dcc_is_steward(mons))
+    {
+        dcc_steward_died(mons);
+        return;
+    }
+    if (!counted)
         return;
     if (!YOU_KILL(killer) && !pet_kill)
         return;

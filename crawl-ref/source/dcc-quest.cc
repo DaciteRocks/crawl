@@ -11,6 +11,17 @@
  * a far reachable floor cell, the floor's monsters worth hunting, whether a
  * death counts as the player's kill, the box reward, and the call that
  * settles a fetch quest when the player moves on to a new floor.
+ *
+ * It also runs the Floor Steward, the quest giver standing in every safe
+ * room: a good neutral human marked with DCC_STEWARD_KEY, who never leaves
+ * its cell (dcc_monster_barred_from()) and gives no XP. The vault's
+ * function_in_los marker calls dcc_steward_seen() whenever the steward's
+ * cell is in view, which happens inside the view update, where a prompt
+ * cannot go; it only notes the offer, and the main loop makes it just
+ * before the player's next command (dcc_quest_before_command(): the
+ * Announcer's introduction, the quest, and a yes/no question, in
+ * dcc_quest_offer() in dcc_quests.lua). Killing the steward voids the
+ * floor's quest.
 **/
 
 #include "AppHdr.h"
@@ -22,6 +33,7 @@
 #include "act-iter.h" // monster_iterator
 #include "coord.h"
 #include "coordit.h"
+#include "delay.h" // you_are_delayed
 #include "dcc-safe.h" // is_dcc_safe_cell
 #include "dlua.h"
 #include "dungeon.h" // map_masked
@@ -214,6 +226,112 @@ void dcc_quest_floor_left(const string &old_place)
     if (!dlua.callfn("dcc_quest_floor_left", "s", old_place.c_str()))
     {
         mprf(MSGCH_ERROR, "dcc_quest_floor_left failed: %s",
+             dlua.error.c_str());
+    }
+}
+
+/// The current level's Floor Steward, or nullptr if it has none (or it
+/// died).
+monster *dcc_find_steward()
+{
+    for (monster_iterator mi; mi; ++mi)
+        if (dcc_is_steward(**mi))
+            return *mi;
+    return nullptr;
+}
+
+/// Is this monster a safe room's Floor Steward?
+bool dcc_is_steward(const monster &mons)
+{
+    return mons.props.exists(DCC_STEWARD_KEY);
+}
+
+/**
+ * Get the current level's Floor Steward ready for its floor's quest
+ * (dcc_quest_setup()): killing it is worth no XP (MF_NO_REWARD). The kill
+ * hook ignores it as well (dcc_monster_killed()).
+ *
+ * @return The steward, or nullptr if the level has none.
+ */
+monster *dcc_prepare_steward()
+{
+    monster *steward = dcc_find_steward();
+    if (steward)
+        steward->flags |= MF_NO_REWARD;
+    return steward;
+}
+
+// The floor whose steward the player has just seen, waiting for the offer;
+// empty if none. Not saved: the trigger notes it again on every view
+// update while the steward is in sight.
+static string _offer_place;
+
+/// The steward's function_in_los marker fired (dcc_steward_seen() in
+/// dat/dlua/dcc.lua): its cell is in view. Note the offer for the main
+/// loop; dcc_quest_offer() asks only once per floor.
+void dcc_steward_seen()
+{
+    if (!crawl_state.game_is_dcc())
+        return;
+    _offer_place = level_id::current().describe();
+}
+
+/**
+ * Take the noted quest offer, if it can be made now: the player is on the
+ * floor whose steward they saw, is not running, travelling, exploring or
+ * in any other delay (the offer waits until the player has control, as
+ * the kiosk does), and can see the steward. The note is cleared either
+ * way; the next view update notes it again while the steward is in sight.
+ *
+ * @return The floor to offer the quest of, or "" for none.
+ */
+string dcc_take_pending_offer()
+{
+    if (!crawl_state.game_is_dcc() || _offer_place.empty())
+        return "";
+    const string place = _offer_place;
+    _offer_place.clear();
+    if (place != level_id::current().describe()
+        || you.running || you_are_delayed())
+    {
+        return "";
+    }
+    const monster *steward = dcc_find_steward();
+    if (!steward || !you.can_see(*steward))
+        return "";
+    return place;
+}
+
+/**
+ * The main loop is about to read the player's next command (main.cc
+ * _input(), after the view update and any delay): make the steward's
+ * quest offer if one is waiting. Headless scripts and tests have no main
+ * loop; they call dcc_quest_offer() with their answer.
+ */
+void dcc_quest_before_command()
+{
+    if (!crawl_state.game_is_dcc() || crawl_state.script || crawl_state.test)
+        return;
+    const string place = dcc_take_pending_offer();
+    if (place.empty())
+        return;
+    if (!dlua.callfn("dcc_quest_offer", "s", place.c_str()))
+        mprf(MSGCH_ERROR, "dcc_quest_offer failed: %s", dlua.error.c_str());
+}
+
+/**
+ * The Floor Steward died (dcc_monster_killed(), for any death): its floor's
+ * quest is void, with a taunt (dcc_quest_steward_died() in
+ * dcc_quests.lua). No kill credit, no achievement.
+ */
+void dcc_steward_died(const monster &mons)
+{
+    if (!crawl_state.game_is_dcc() || !dcc_is_steward(mons))
+        return;
+    const string place = level_id::current().describe();
+    if (!dlua.callfn("dcc_quest_steward_died", "s", place.c_str()))
+    {
+        mprf(MSGCH_ERROR, "dcc_quest_steward_died failed: %s",
              dlua.error.c_str());
     }
 }

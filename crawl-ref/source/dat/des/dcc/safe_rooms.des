@@ -9,6 +9,11 @@
 # (dcc_kiosk_activate() in dlua/dcc.lua, dcc-boxes.cc), and whose dcc_kiosk
 # property is what makes it a kiosk. The epilogue sets up the floor's quest
 # on the player's first arrival (dcc_quest_setup() in dlua/dcc_quests.lua).
+# The Floor Steward (1) offers that quest: a good neutral human whose
+# MonPropsMarker gives it the dcc_steward prop (it keeps its post and is
+# worth no XP or kill credit, dcc-safe.cc, dcc-quest.cc), and whose cell's
+# function_in_los marker makes the offer when the player sees it
+# (dcc_steward_seen() in dlua/dcc.lua, dcc_quest_offer()).
 # Every cell inside the walls is dcc_safe:
 # hostile monsters cannot enter, and there is no combat inside (dcc-safe.cc).
 # The door stays an ordinary cell, the way out for a hostile that ends up
@@ -39,15 +44,18 @@ TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
-KPROP:  .{([SK = dcc_safe
+KPROP:  .{([SK1 = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
 epilogue{{
   dcc_quest_setup(_G)
 }}
 MAP
 xxxxxxxxx
 x{..S..(x
-x.......x
+x.....1.x
 x[..K...x
 xxxx+xxxx
 ENDMAP
@@ -60,8 +68,11 @@ TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
-KPROP:  .{([SK = dcc_safe
+KPROP:  .{([SK1 = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
 epilogue{{
   dcc_quest_setup(_G)
 }}
@@ -69,7 +80,7 @@ MAP
 xxxx+xxxx
 x.......x
 x{.K.S.(x
-x...[...x
+x...[.1.x
 xxxxxxxxx
 ENDMAP
 
@@ -81,8 +92,11 @@ TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
-KPROP:  .{([SK = dcc_safe
+KPROP:  .{([SK1 = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
 epilogue{{
   dcc_quest_setup(_G)
 }}
@@ -92,7 +106,7 @@ x{...Sx
 x.....x
 x(.K..+
 x.....x
-x[....x
+x[..1.x
 xxxxxxx
 ENDMAP
 
@@ -104,8 +118,11 @@ TAGS:   no_rotate no_hmirror no_vmirror transparent
 ORIENT: float
 KFEAT:  S = general shop count:8 name:Commissary type:Store
 KFEAT:  K = floor
-KPROP:  .{([SK = dcc_safe
+KPROP:  .{([SK1 = dcc_safe
 MARKER: K = lua:function_at_spot("dcc_kiosk_activate", {}, true, { feature_description = "a loot box kiosk", dcc_kiosk = "1" })
+MONS:   human name:Floor_Steward n_rpl n_des att:good_neutral
+MARKER: 1 = lua:MonPropsMarker:new {dcc_steward = 1}
+MARKER: 1 = lua:function_in_los("dcc_steward_seen", {}, true, { dcc_steward_post = "1" })
 epilogue{{
   dcc_quest_setup(_G)
 }}
@@ -115,6 +132,6 @@ xS...{x
 x.....x
 +..K.(x
 x.....x
-x....[x
+x.1..[x
 xxxxxxx
 ENDMAP

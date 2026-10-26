@@ -1022,6 +1022,21 @@ LUAFN(dcc_activate_markers_lua)
     return 0;
 }
 
+/*** Initialise the level's markers, as building a new level does (files.cc
+ * runs env.markers.init_all() once the level is generated, before anyone
+ * enters it); test.regenerate_level() does not, so without this a
+ * script's MonPropsMarker never gives its monster its props.
+ * Script/test only.
+ * @function init_markers
+ */
+LUAFN(dcc_init_markers_lua)
+{
+    if (!_dcc_script_only(ls, "init_markers"))
+        return 0;
+    env.markers.init_all();
+    return 0;
+}
+
 // A box tier by its name ("Bronze", ...); raises a Lua error otherwise.
 static dcc_box_tier _dcc_tier_arg(lua_State *ls, int arg)
 {
@@ -1272,6 +1287,80 @@ LUAFN(dcc_pick_up_lua)
     PLUARET(number, static_cast<int>(here.size()) - left);
 }
 
+/*** Get the current level's Floor Steward ready for its floor's quest
+ * (dcc_prepare_steward(): killing it is worth no XP) and say where it
+ * stands.
+ * @treturn int|nil x
+ * @treturn int|nil y
+ * @function prepare_steward
+ */
+LUAFN(dcc_prepare_steward_lua)
+{
+    const monster *steward = dcc_prepare_steward();
+    if (!steward)
+        return 0;
+    lua_pushinteger(ls, steward->pos().x);
+    lua_pushinteger(ls, steward->pos().y);
+    return 2;
+}
+
+/*** Where the current level's Floor Steward stands, if it has one.
+ * @treturn int|nil x
+ * @treturn int|nil y
+ * @function steward_pos
+ */
+LUAFN(dcc_steward_pos_lua)
+{
+    const monster *steward = dcc_find_steward();
+    if (!steward)
+        return 0;
+    lua_pushinteger(ls, steward->pos().x);
+    lua_pushinteger(ls, steward->pos().y);
+    return 2;
+}
+
+/*** The Floor Steward's cell is in view: note the quest offer for the main
+ * loop (dcc_steward_seen()). The steward's function_in_los marker calls
+ * this (dcc_steward_seen() in dat/dlua/dcc.lua).
+ * @function steward_seen
+ */
+LUAFN(dcc_steward_seen_lua)
+{
+    dcc_steward_seen();
+    return 0;
+}
+
+/*** Take the noted quest offer, as the main loop does before the player's
+ * next command (dcc_take_pending_offer()): the floor to offer, or nil if
+ * none is waiting or it cannot be made now. Script/test only.
+ * @treturn string|nil
+ * @function take_pending_offer
+ */
+LUAFN(dcc_take_pending_offer_lua)
+{
+    if (!_dcc_script_only(ls, "take_pending_offer"))
+        return 0;
+    const string place = dcc_take_pending_offer();
+    if (place.empty())
+        return 0;
+    PLUARET(string, place.c_str());
+}
+
+/*** Fire the DET_PLAYER_IN_LOS dungeon event for a cell, as the view
+ * update does for every cell in sight (show.cc). Script/test only.
+ * @tparam int x
+ * @tparam int y
+ * @function fire_los
+ */
+LUAFN(dcc_fire_los_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    if (!_dcc_script_only(ls, "fire_los"))
+        return 0;
+    dungeon_events.fire_position_event(DET_PLAYER_IN_LOS, c);
+    return 0;
+}
+
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1323,6 +1412,7 @@ static const struct luaL_Reg dcc_dlib[] =
 { "delayed", dcc_delayed_lua },
 { "stop_delay", dcc_stop_delay_lua },
 { "activate_markers", dcc_activate_markers_lua },
+{ "init_markers", dcc_init_markers_lua },
 { "award_box", dcc_award_box_lua },
 { "box_item_count", dcc_box_item_count_lua },
 { "box_open_turns", dcc_box_open_turns_lua },
@@ -1338,6 +1428,11 @@ static const struct luaL_Reg dcc_dlib[] =
 { "fire_turn", dcc_fire_turn_lua },
 { "pick_up", dcc_pick_up_lua },
 { "set_hp", dcc_set_hp_lua },
+{ "prepare_steward", dcc_prepare_steward_lua },
+{ "steward_pos", dcc_steward_pos_lua },
+{ "steward_seen", dcc_steward_seen_lua },
+{ "take_pending_offer", dcc_take_pending_offer_lua },
+{ "fire_los", dcc_fire_los_lua },
 { nullptr, nullptr }
 };
 
