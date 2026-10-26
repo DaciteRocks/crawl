@@ -124,6 +124,10 @@ visibly DCC-only. Recorded exceptions:
   `dcc_place_player_as_arriving()` (declared in `dcc-room.h`), which runs
   the static `_place_player()` for `dcc.arrival_spot()`, so the smoke test
   uses the real arrival code instead of a copy of it.
+- Phase 4b (loot boxes) adds one `case AQ_DCC_BOX:` to the `origin_desc()`
+  switch in `items.cc` (plus the `#include "dcc-boxes.h"` it needs), so a
+  box item's description says it was won from a loot box. `AQ_DCC_BOX`
+  items exist only in DCC games, so the case needs no guard.
 
 State lives in
 `you.props` (keys prefixed `dcc_`) and `dgn.persist`; no new `player` fields,

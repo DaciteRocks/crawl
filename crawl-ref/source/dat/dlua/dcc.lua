@@ -7,9 +7,10 @@
 ------------------------------------------------------------------------------
 
 -- The loot box kiosk: a function_at_spot marker on the safe room's K cell
--- calls this whenever the player steps onto it. The C++ side does the rest:
--- it refuses off a safe-room kiosk, says so if there is nothing to open,
--- asks, and opens the boxes (dcc-boxes.cc dcc_open_boxes()).
+-- calls this whenever the player moves onto it, by any means (the marker
+-- fires on every player move). The C++ side does the rest
+-- (dcc-boxes.cc dcc_kiosk_stepped()): only a deliberate step opens boxes,
+-- asking first; travel, autoexplore, blinks and teleports pass silently.
 function dcc_kiosk_activate(data, triggerable, triggerer, marker, ev)
-  dcc.open_boxes()
+  dcc.kiosk_stepped()
 end

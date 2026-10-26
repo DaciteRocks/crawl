@@ -123,7 +123,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 3a | `FPROP_DCC_SAFE` monster-exclusion property | done 2026-10-25 |
 | 3b | Safe-room vault on every floor | done 2026-10-25 |
 | 4a | Achievement table, hooks, Announcer lines | done 2026-10-25 |
-| 4b | Loot boxes and the kiosk | not started |
+| 4b | Loot boxes and the kiosk | done 2026-10-25 |
 | 5a | Quest engine (Lua, four objective kinds) | not started |
 | 5b | Quest giver NPC and offer flow | not started |
 | 6a | Floor bosses | not started |
@@ -592,7 +592,9 @@ for the agent codes), `makeitem.h` (`items()` signature), `lm_trig.lua`
 Loot tables (counts of items; "acq" = `acquirement_create_item` with a
 random class from `shuffled_acquirement_classes(false)`, agent a new
 `AQ_DCC_BOX` constant defined in `dcc-boxes.h` with a value above existing
-codes; "rand" = `items(true, OBJ_RANDOM, OBJ_RANDOM, you.depth + 3)`):
+codes; "rand" = `items(true, OBJ_RANDOM, OBJ_RANDOM, level)` with level =
+absolute depth + 3, i.e. `env.absdepth0 + 4`, not `you.depth + 3`:
+Resolved decision 10):
 Bronze 2 rand; Silver 1 acq + 1 rand; Gold 2 acq; Platinum 3 acq (one forced
 `OBJ_WEAPONS` or `OBJ_ARMOUR`); Legendary 3 acq + 1 randart (apply
 `make_item_randart`); Celestial 4 acq + 1 randart + 1 `OBJ_WANDS`. Add a
@@ -611,7 +613,15 @@ the prompt when `crawl_state.script` or take a `bool force` from Lua.
 Acquirement needs a sane `you` (species, skills) to pick classes; in script
 mode results may be odd but must not crash.
 
-Status: not started
+Kiosk rules as built (5b's LOS-triggered offer should follow the same
+pattern; details in `spec-history/discovery.md`): only a deliberate step
+(a move command, not running/travel/autoexplore, a blink or a teleport)
+asks; the boxes that fit the level's free item slots are worked out before
+asking, and none fitting jams without a prompt; opening is a cancellable
+delay, one box per 2 turns. No box item is one the player's god forbids,
+and Legendary/Celestial always hold an artefact.
+
+Status: done 2026-10-25
 
 ---
 
@@ -817,6 +827,9 @@ Status: not started
    harmful spells or evocations; the Announcer refuses), hostile attacks
    cannot reach them (no melee across the edge, no missiles, spells or
    breath aimed at them), and allies inside do not fight either.
+10. (orchestrator, 2026-10-25) Loot box "rand" items roll at absolute
+   depth + 3 (`env.absdepth0 + 4`), not `you.depth + 3`. Branch-relative
+   depth would make a Lair:1 box roll level-4 junk; on D:N both give N + 3.
 
 ## Assumptions (proceeding under)
 

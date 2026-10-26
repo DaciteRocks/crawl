@@ -137,3 +137,29 @@ Machine: Windows 11, Git Bash, VS 18 Insiders MSBuild, toolset v145.
   Natasha are cleared on death.
 - `crawl.messages()` wraps long lines, so text matches must normalise
   whitespace.
+
+## Phase 4b — loot boxes (2026-10-25)
+
+- `function_at_spot` (`lm_trig.lua`) fires on `DET_PLAYER_MOVED`, which
+  `player::set_position()` raises for every move: travel, autoexplore,
+  runs, blinks and teleports included, and it is called mid-move. A
+  callback that prompts must decline unless the move was a deliberate step:
+  `you.running` is set for runs, travel and autoexplore, and
+  `crawl_state.prev_cmd` holds the command being processed (`main.cc` sets
+  it before `process_command()`), so a `CMD_MOVE_*`/`CMD_SAFE_MOVE_*` there
+  means a plain step. Headless scripts issue no commands.
+- Autoexplore stops only at markers with a `stop_explore` property
+  (`travel.cc`), so a marker without one is no stop point.
+- A `Delay` is uninterruptible unless it overrides `try_interrupt()`, and
+  nothing checks for a keypress except runs (`kbhit()` in
+  `_get_running_command()`); a delay that should stop on a key checks
+  `kbhit()` itself (false in headless mode). Activity interrupts other than
+  `force` need an `activity_interrupts` entry for the delay's name.
+- `acquirement_create_item()` runs its god/usefulness checks before
+  returning; anything done to the item afterwards (`make_item_randart()`)
+  must be re-checked. `make_item_randart()` only respects a god for god
+  gifts (`origin_as_god_gift()`).
+- Level markers round-trip with `env.markers.write()/read()`; after reading,
+  `dungeon_events.clear()` then `activate_all()` re-registers listeners.
+  The des global prelude (`crawl_require('dlua/dcc.lua')`) runs at startup
+  (`run_map_global_preludes()`), so the callback exists when a save loads.

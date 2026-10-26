@@ -17,12 +17,15 @@ module "dcc"
 #include "dcc-room.h"
 #include "dcc-safe.h"
 #include "coord.h"
+#include "delay.h" // handle_delay, stop_delay
 #include "coordit.h"
 #include "dungeon.h"
+#include "dgn-event.h" // dungeon_events
 #include "env.h"
-#include "artefact.h" // is_artefact
+#include "god-item.h" // god_forbids_item
 #include "items.h" // stack_iterator
 #include "mapmark.h"
+#include "religion.h" // str_to_god
 #include "fight.h"
 #include "flood-find.h"
 #include "maps.h"
@@ -40,6 +43,7 @@ module "dcc"
 #include "tag-version.h" // TAG_MINOR_VERSION
 #include "tags.h" // writer, reader
 #include "terrain.h"
+#include "travel.h" // RMODE_TRAVEL
 #include "unwind.h"
 
 //
@@ -814,11 +818,14 @@ static const char *_dcc_open_result_name(dcc_open_result res)
     return "unknown";
 }
 
-/*** Open the player's boxes at the kiosk they stand on (the kiosk's
- * marker calls this). Asks first in a live game, unless forced; headless
- * scripts and tests never ask and open at once, where a live game takes
- * dcc.box_open_turns() turns.
+/*** Open the player's boxes at the kiosk they stand on: as many, oldest
+ * first, as the level has item slots for (dcc.boxes_that_fit()). Asks
+ * first in a live game, unless forced; headless scripts and tests never
+ * ask and open at once, where a live game takes dcc.box_open_turns() turns
+ * for them.
  * @tparam[opt] boolean force skip the question
+ * @tparam[opt] boolean live script/test only: start the live game's delay
+ *   instead of opening at once (drive it with dcc.run_delays())
  * @treturn boolean whether the boxes opened (or began opening)
  * @treturn string "opened", "not_dcc", "no_kiosk" (not on a safe-room
  *   kiosk), "no_boxes", "declined" or "jammed" (no room for more items on
@@ -827,7 +834,10 @@ static const char *_dcc_open_result_name(dcc_open_result res)
  */
 LUAFN(dcc_open_boxes_lua)
 {
-    const dcc_open_result res = dcc_open_boxes(lua_toboolean(ls, 1));
+    const bool live = lua_toboolean(ls, 2);
+    if (live && !_dcc_script_only(ls, "open_boxes(force, live)"))
+        return 0;
+    const dcc_open_result res = dcc_open_boxes(lua_toboolean(ls, 1), live);
     lua_pushboolean(ls, res == dcc_open_result::opened);
     lua_pushstring(ls, _dcc_open_result_name(res));
     return 2;
@@ -842,24 +852,159 @@ LUAFN(dcc_at_kiosk_lua)
     PLUARET(boolean, dcc_at_kiosk());
 }
 
-/*** Where the level's kiosk is: the first cell carrying the kiosk marker
- * property. Returns nothing if the level has none.
- * @treturn int|nil x
- * @treturn int|nil y
- * @function kiosk_spot
+/*** The kiosk marker's callback: the player has just moved onto the kiosk.
+ * Only a deliberate step opens the boxes (asking first, as open_boxes());
+ * travel, autoexplore, running, blinks and teleports are declined silently.
+ * Headless scripts make no commands, so there only dcc.set_running()
+ * counts as not deliberate.
+ * @treturn boolean whether the boxes opened (or began opening)
+ * @treturn string as open_boxes()
+ * @function kiosk_stepped
  */
-LUAFN(dcc_kiosk_spot_lua)
+LUAFN(dcc_kiosk_stepped_lua)
 {
-    for (rectangle_iterator ri(1); ri; ++ri)
+    const dcc_open_result res = dcc_kiosk_stepped();
+    lua_pushboolean(ls, res == dcc_open_result::opened);
+    lua_pushstring(ls, _dcc_open_result_name(res));
+    return 2;
+}
+
+/*** How many of the held boxes, oldest first, the level has item slots for
+ * right now (the kiosk opens at most these).
+ * @treturn int
+ * @function boxes_that_fit
+ */
+LUAFN(dcc_boxes_that_fit_lua)
+{
+    PLUARET(number, dcc_boxes_that_fit());
+}
+
+/*** Pretend the player is running or travelling (or stop pretending), so
+ * a script can move them across the kiosk as travel would. Script/test
+ * only.
+ * @tparam boolean running
+ * @function set_running
+ */
+LUAFN(dcc_set_running_lua)
+{
+    const bool running = lua_toboolean(ls, 1);
+    if (!_dcc_script_only(ls, "set_running"))
+        return 0;
+    you.running = running ? RMODE_TRAVEL : RMODE_NOT_RUNNING;
+    return 0;
+}
+
+/*** Make the player a follower of a god, by name (a unique part of it
+ * will do), without the joining ceremony (gifts, piety, messages); "" or
+ * "No God" for none. Only
+ * you.religion changes, which is what god_forbids_item() reads.
+ * Script/test only.
+ * @tparam string god
+ * @function set_god
+ */
+LUAFN(dcc_set_god_lua)
+{
+    const string name = luaL_checkstring(ls, 1);
+    if (!_dcc_script_only(ls, "set_god"))
+        return 0;
+    const god_type god = str_to_god(name, false);
+    if (god == GOD_NO_GOD && !name.empty()
+        && lowercase_string(name) != "no god")
     {
-        if (env.markers.property_at(*ri, MAT_ANY, DCC_KIOSK_PROP) == "1")
+        return luaL_error(ls, "dcc: no god '%s'", name.c_str());
+    }
+    you.religion = god;
+    return 0;
+}
+
+/*** How many items on a cell the player's god forbids (checked as if
+ * identified, as acquirement checks). Script/test only.
+ * @tparam int x
+ * @tparam int y
+ * @treturn int
+ * @function forbidden_items_at
+ */
+LUAFN(dcc_forbidden_items_at_lua)
+{
+    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
+    if (!_dcc_script_only(ls, "forbidden_items_at"))
+        return 0;
+    int n = 0;
+    if (in_bounds(c))
+    {
+        for (stack_iterator si(c); si; ++si)
         {
-            lua_pushnumber(ls, ri->x);
-            lua_pushnumber(ls, ri->y);
-            return 2;
+            item_def item = *si;
+            item.flags |= ISFLAG_IDENTIFIED;
+            if (god_forbids_item(item))
+                ++n;
         }
     }
+    PLUARET(number, n);
+}
+
+/*** Run the player's delays (the kiosk's, after dcc.open_boxes(true,
+ * true)) one turn at a time, as the main loop does, until none is left or
+ * after at most n turns. Script/test only.
+ * @tparam int n
+ * @treturn int how many turns ran
+ * @function run_delays
+ */
+LUAFN(dcc_run_delays_lua)
+{
+    const int n = luaL_safe_checkint(ls, 1);
+    if (!_dcc_script_only(ls, "run_delays"))
+        return 0;
+    int turns = 0;
+    while (turns < n && you_are_delayed())
+    {
+        handle_delay();
+        ++turns;
+    }
+    PLUARET(number, turns);
+}
+
+/*** Is the player in the middle of a delay?
+ * @treturn boolean
+ * @function delayed
+ */
+LUAFN(dcc_delayed_lua)
+{
+    PLUARET(boolean, you_are_delayed());
+}
+
+/*** Interrupt the player's delay, as a forced interrupt would
+ * (stop_delay(true)). Script/test only.
+ * @function stop_delay
+ */
+LUAFN(dcc_stop_delay_lua)
+{
+    if (!_dcc_script_only(ls, "stop_delay"))
+        return 0;
+    stop_delay(true);
     return 0;
+}
+
+/*** Put the level's markers through the save file's marshalling and back,
+ * then activate them, as saving the level and arriving on it again would
+ * (tags.cc writes env.markers; load_level() activates them). Script/test
+ * only.
+ * @treturn int how many markers made the round trip
+ * @function markers_roundtrip
+ */
+LUAFN(dcc_markers_roundtrip_lua)
+{
+    if (!_dcc_script_only(ls, "markers_roundtrip"))
+        return 0;
+    vector<unsigned char> buf;
+    writer outf(&buf);
+    env.markers.write(outf);
+
+    dungeon_events.clear();
+    reader inf(buf, TAG_MINOR_VERSION);
+    env.markers.read(inf);
+    env.markers.activate_all(false);
+    PLUARET(number, env.markers.get_all().size());
 }
 
 /*** Activate the level's markers, as arriving on a level does (load_level()
@@ -934,39 +1079,6 @@ LUAFN(dcc_free_item_slots_lua)
     PLUARET(number, dcc_free_item_slots());
 }
 
-/*** The item stacks on a cell (none out of bounds).
- * @tparam int x
- * @tparam int y
- * @treturn int how many stacks
- * @treturn table their names (DESC_PLAIN, as the game would print them)
- * @treturn int how many are artefacts
- * @treturn int how many are unrandarts
- * @function items_at
- */
-LUAFN(dcc_items_at_lua)
-{
-    const coord_def c(luaL_safe_checkint(ls, 1), luaL_safe_checkint(ls, 2));
-    int n = 0, arts = 0, unrands = 0;
-    lua_newtable(ls);
-    if (in_bounds(c))
-    {
-        for (stack_iterator si(c); si; ++si)
-        {
-            lua_pushstring(ls, si->name(DESC_PLAIN).c_str());
-            lua_rawseti(ls, -2, ++n);
-            if (is_artefact(*si))
-                ++arts;
-            if (is_unrandom_artefact(*si))
-                ++unrands;
-        }
-    }
-    lua_pushnumber(ls, n);
-    lua_insert(ls, -2);
-    lua_pushnumber(ls, arts);
-    lua_pushnumber(ls, unrands);
-    return 4;
-}
-
 static const struct luaL_Reg dcc_dlib[] =
 {
 { "is_active", dcc_is_active },
@@ -1008,13 +1120,20 @@ static const struct luaL_Reg dcc_dlib[] =
 { "save_roundtrip", dcc_save_roundtrip_lua },
 { "open_boxes", dcc_open_boxes_lua },
 { "at_kiosk", dcc_at_kiosk_lua },
-{ "kiosk_spot", dcc_kiosk_spot_lua },
+{ "kiosk_stepped", dcc_kiosk_stepped_lua },
+{ "boxes_that_fit", dcc_boxes_that_fit_lua },
+{ "set_running", dcc_set_running_lua },
+{ "set_god", dcc_set_god_lua },
+{ "forbidden_items_at", dcc_forbidden_items_at_lua },
+{ "markers_roundtrip", dcc_markers_roundtrip_lua },
+{ "run_delays", dcc_run_delays_lua },
+{ "delayed", dcc_delayed_lua },
+{ "stop_delay", dcc_stop_delay_lua },
 { "activate_markers", dcc_activate_markers_lua },
 { "award_box", dcc_award_box_lua },
 { "box_item_count", dcc_box_item_count_lua },
 { "box_open_turns", dcc_box_open_turns_lua },
 { "free_item_slots", dcc_free_item_slots_lua },
-{ "items_at", dcc_items_at_lua },
 { nullptr, nullptr }
 };
 

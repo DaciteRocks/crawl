@@ -209,3 +209,35 @@ only recorded for now (`dcc_award_box` stub until 4b). Reviewers changed:
   only empty cells and reads the monster's real position, and the unique
   checks pick uniques that are still unplaced. Before this, a check could
   kill one of the level's own monsters, so the script failed at random.
+
+## 2026-10-25 — Phase 4b done
+
+Landed: `dcc-boxes.cc/.h`. The safe room's `K` cell is a working kiosk (a
+`function_at_spot` marker, callback in `dat/dlua/dcc.lua`). Boxes drop
+their tier's items (rand / acquirement / randart / wand) on safe floor
+within radius 2 of it, never into the pack, and never make trunk cull the
+level's items. Every roll uses the game RNG. Reviewers changed:
+- the kiosk asks only on a deliberate step; travel, autoexplore, running,
+  blinks and teleports cross it silently, and it is no travel stop. The old
+  build prompted mid-travel and called `stop_delay` from inside it;
+- the boxes that fit the free item slots are worked out before asking; the
+  prompt and delay cover just those, none fitting jams without a prompt,
+  and there is one jam message instead of two;
+- opening is cancellable: a box opens every 2 turns, and a keypress, a
+  forced interrupt or leaving the kiosk stops it between boxes. No cap on
+  boxes per sitting (2 turns a box is small next to a 1200-turn floor);
+- the randart is re-checked after conversion and rerolled if the god
+  forbids it or it is useless; it draws from every randart-capable class
+  (staves and talismans too) and is guaranteed, with a plain acquirement
+  item as the documented last resort. Rand items the god forbids are
+  rerolled. The Celestial wand no longer falls through to other classes
+  unless acquirement finds no usable wand;
+- box items say "You won it from a loot box" (`case AQ_DCC_BOX` in
+  `items.cc` `origin_desc()`);
+- `dcc.kiosk_spot` and `dcc.items_at` are gone (the smoke uses
+  `dgn.find_marker_position_by_prop` and `dgn.items_at`);
+- "rand" stays at absolute depth + 3 (Resolved decision 10);
+- smoke: running suppression, the up-front fit and jam, the live delay
+  (progressive opening, interrupt, leaving the kiosk), Platinum gear,
+  Celestial wand and artefact, no TSO-forbidden or useless artefact over 8
+  Legendary boxes, and the kiosk marker after a level marker round trip.

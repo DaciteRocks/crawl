@@ -31,6 +31,7 @@
 #include "corpse.h"
 #include "database.h" // getRandNameString
 #include "dbg-util.h"
+#include "dcc-boxes.h" // AQ_DCC_BOX
 #include "defines.h"
 #include "delay.h"
 #include "describe.h"
@@ -1329,6 +1330,9 @@ string origin_desc(const item_def &item)
 #endif
             case AQ_WIZMODE:
                 desc += "Your wizardly powers created "+ _article_it(item)+ " ";
+                break;
+            case AQ_DCC_BOX:
+                desc += "You won " + _article_it(item) + " from a loot box ";
                 break;
             default:
                 if (iorig > GOD_NO_GOD && iorig < NUM_GODS)
