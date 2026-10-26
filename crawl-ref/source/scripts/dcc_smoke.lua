@@ -41,6 +41,9 @@ for _, p in ipairs(places) do
     check(test.level_has_down_stair(), p.place .. " has a down stair")
   end
 end
+-- Those builds gave D:6 and D:12 floor themes, which scale their clocks
+-- (Phase 6d); the clock checks below expect the plain tunables.
+dcc.reset_themes()
 
 -- Phase 2a: the per-floor clock.
 debug.goto_place("D:1")
@@ -936,7 +939,8 @@ check(not dcc.has_achievement("quick_exit"),
 
 dcc.reset_achievements()
 kill("orc")
-dcc.set_floor_turns_left(480)  -- 40% of D:7's 1200
+-- 40% of D:7's clock (1200, unless a floor theme scaled it: Phase 6d).
+dcc.set_floor_turns_left(math.floor(dcc.floor_turns_total() * 40 / 100))
 debug.goto_place("D:8")
 dcc.enter_floor(true)
 check(not dcc.has_achievement("quick_exit"),
@@ -1925,9 +1929,12 @@ local function phase6a()
   end
   -- A first arrival on the floor by its down stairs: the player stands in
   -- the safe room, as a real arrival leaves them.
+  -- The floor's theme is taken away after the build: a Crowd Work theme
+  -- would add monsters on arrival (Phase 6d), some of the boss's kind.
   local function arrive(place)
     debug.goto_place(place)
     test.regenerate_level()
+    dcc.set_theme(place, nil)
     dcc.arrival_spot("stairs_i")
   end
 
@@ -2283,3 +2290,103 @@ local function phase6c()
   debug.goto_place("D:1")
 end
 phase6c()
+
+-- Phase 6d: themes bite. A theme sets the floor's random-monster list, its
+-- colours, its extra monsters on arrival, its clock percent and its quest
+-- tier.
+local function phase6d()
+  dcc.reset_themes()
+
+  -- Lightning Round: a 60% clock, yellow and red, a quest one tier up.
+  dcc.set_theme("D:4", "lightning")
+  debug.goto_place("D:4")
+  test.regenerate_level()
+  dcc.start_floor_clock()
+  check(dcc.floor_turns_total() == 720,
+        "a Lightning Round D:4 runs a 720-turn clock (1200 x 60%), got "
+        .. dcc.floor_turns_total())
+  local floor, rock = dcc.level_colours()
+  check(floor == "yellow" and rock == "red",
+        "a Lightning Round floor is yellow and red (" .. floor .. ", "
+        .. rock .. ")")
+  check(dcc.theme_quest_bump() == 1 and dcc.theme_quest_bump("D:4") == 1,
+        "Lightning Round bumps the quest one tier")
+  check(dcc.theme_mon_list("D:4") == "",
+        "Lightning Round keeps trunk's monster list")
+  dcc_quest_debug().setup("reach")
+  local q = dcc.quest_state()
+  check(q ~= nil and q.tier == "Silver",
+        "the D:4 Lightning Round quest pays Silver, not Bronze ("
+        .. tostring(q and q.tier) .. ")")
+  check(q.text:find("Silver", 1, true) ~= nil,
+        "the quest text names the bumped tier")
+
+  -- Reruns: the floor's population is undead.
+  dcc.set_theme("D:5", "reruns")
+  debug.goto_place("D:5")
+  test.regenerate_level()
+  check(dcc.theme_mon_list("D:5"):find("place:D:5 zombie", 1, true) ~= nil,
+        "the Reruns list is the floor's own monsters, raised ("
+        .. dcc.theme_mon_list("D:5") .. ")")
+  local c = dcc.monster_counts()
+  check(c.undead_outside_vaults * 2 > c.outside_vaults,
+        "most monsters outside vaults on a Reruns floor are undead ("
+        .. c.undead_outside_vaults .. " of " .. c.outside_vaults .. ")")
+  floor, rock = dcc.level_colours()
+  check(floor == "darkgrey" and rock == "lightgrey",
+        "a Reruns floor is grey (" .. floor .. ", " .. rock .. ")")
+  check(dcc.theme_quest_bump() == 0, "Reruns bumps no quest tier")
+
+  -- Crowd Work: extra monsters on the first arrival, the normal clock.
+  dcc.set_theme("D:6", "crowd")
+  debug.goto_place("D:6")
+  test.regenerate_level()
+  local before = dcc.monster_counts().total
+  dcc.arrival_spot("stairs_i")
+  dcc.enter_floor(true)
+  local after = dcc.monster_counts().total
+  check(after >= before + 4,
+        "Crowd Work adds monsters on arrival (" .. before .. " -> "
+        .. after .. ")")
+
+  -- Headliners: monsters from four floors deeper, a 120% clock, clamped at
+  -- a branch's bottom.
+  dcc.set_theme("D:7", "headliners")
+  debug.goto_place("D:7")
+  test.regenerate_level()
+  check(dcc.theme_mon_list("D:7") == "place:D:11",
+        "Headliners on D:7 draws from D:11 (" .. dcc.theme_mon_list("D:7")
+        .. ")")
+  dcc.start_floor_clock()
+  check(dcc.floor_turns_total() == 1440,
+        "a Headliners D:7 runs a 1440-turn clock (1200 x 120%), got "
+        .. dcc.floor_turns_total())
+  check(dcc.theme_quest_bump() == 1, "Headliners bumps the quest one tier")
+  dcc.set_theme("D:10", "headliners")
+  check(dcc.theme_mon_list("D:10") == "place:D:12",
+        "Headliners on D:10 clamps to D:12")
+  dcc.set_theme("Zot:5", "headliners")
+  check(dcc.theme_mon_list("Zot:5") == "place:Zot:5",
+        "Headliners on Zot:5 draws from Zot:5")
+
+  -- Crowd Work does not scale the clock.
+  dcc.set_theme("D:8", "crowd")
+  debug.goto_place("D:8")
+  test.regenerate_level()
+  dcc.start_floor_clock()
+  check(dcc.floor_turns_total() == 1200,
+        "a Crowd Work D:8 keeps the 1200-turn clock, got "
+        .. dcc.floor_turns_total())
+  dcc.set_theme("D:8", nil)
+  check(dcc.theme_for("D:8") == nil, "set_theme with no id clears a theme")
+
+  -- An unthemed floor keeps trunk's colours and list.
+  dcc.reset_themes()
+  debug.goto_place("D:1")
+  test.regenerate_level()
+  check(dcc.theme_mon_list() == "" and dcc.theme_quest_bump() == 0,
+        "unthemed D:1 keeps trunk's list and quest tier")
+  dcc.start_floor_clock()
+  check(dcc.floor_turns_total() == 1500, "unthemed D:1 keeps its 1500 turns")
+end
+phase6d()

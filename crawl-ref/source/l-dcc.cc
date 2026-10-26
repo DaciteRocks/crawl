@@ -8,6 +8,7 @@ module "dcc"
 
 #include "l-libs.h"
 
+#include "act-iter.h" // monster_iterator
 #include "cluautil.h"
 #include "colour.h" // colour_to_str
 #include "dcc.h"
@@ -1578,21 +1579,27 @@ LUAFN(dcc_theme_table_lua)
 }
 
 /*** Give a floor a theme, as if it had been drawn for it; a later build of
- * that floor keeps it. Script/test only.
+ * that floor keeps it. With no id, take the floor's theme away (a level
+ * already built keeps what its build applied). Script/test only.
  * @tparam string place a level ("D:5")
- * @tparam string id a theme id from theme_table()
+ * @tparam[opt] string id a theme id from theme_table()
  * @function set_theme
  */
 LUAFN(dcc_set_theme_lua)
 {
-    const string place = luaL_checkstring(ls, 1);
-    const string id = luaL_checkstring(ls, 2);
+    luaL_checkstring(ls, 1);
+    const bool clear = lua_isnoneornil(ls, 2);
+    const string id = clear ? string() : string(luaL_checkstring(ls, 2));
     if (!_dcc_script_only(ls, "set_theme"))
         return 0;
-    if (!dcc_theme_by_id(id))
+    if (!clear && !dcc_theme_by_id(id))
         return luaL_error(ls, "dcc.set_theme(): unknown theme '%s'", id.c_str());
     const level_id lid = _place_arg(ls, 1, "set_theme");
-    you.props[DCC_THEMES_KEY].get_table()[lid.describe()] = id;
+    CrawlHashTable &themes = you.props[DCC_THEMES_KEY].get_table();
+    if (clear)
+        themes.erase(lid.describe());
+    else
+        themes[lid.describe()] = id;
     return 0;
 }
 
@@ -1607,6 +1614,72 @@ LUAFN(dcc_reset_themes_lua)
     you.props.erase(DCC_THEMES_KEY);
     you.props.erase(DCC_LAST_THEME_KEY);
     return 0;
+}
+
+/*** A floor theme's random-monster list spec as its floor's build expands
+ * it (dcc_theme_mon_list()).
+ * @tparam[opt] string place a level ("D:5"); default the current level
+ * @treturn string the spec ("place:D:9"), or "" if the floor's list is
+ *   trunk's
+ * @function theme_mon_list
+ */
+LUAFN(dcc_theme_mon_list_lua)
+{
+    PLUARET(string,
+            dcc_theme_mon_list(_place_arg(ls, 1, "theme_mon_list")).c_str());
+}
+
+/*** How many box tiers a floor's theme moves its quest up
+ * (dcc_theme_quest_bump()).
+ * @tparam[opt] string place a level ("D:5"); default the current level
+ * @treturn int 0 if the floor has no theme or its theme bumps nothing
+ * @function theme_quest_bump
+ */
+LUAFN(dcc_theme_quest_bump_lua)
+{
+    PLUARET(number,
+            dcc_theme_quest_bump(_place_arg(ls, 1, "theme_quest_bump")));
+}
+
+/*** The current level's floor and rock colours.
+ * @treturn string floor colour name ("yellow")
+ * @treturn string rock colour name
+ * @function level_colours
+ */
+LUAFN(dcc_level_colours_lua)
+{
+    lua_pushstring(ls, colour_to_str(env.floor_colour).c_str());
+    lua_pushstring(ls, colour_to_str(env.rock_colour).c_str());
+    return 2;
+}
+
+/*** Count the monsters on the current level.
+ * @treturn table { total=, undead=, outside_vaults=,
+ *   undead_outside_vaults= }
+ * @function monster_counts
+ */
+LUAFN(dcc_monster_counts_lua)
+{
+    int total = 0, undead = 0, outside = 0, undead_outside = 0;
+    for (monster_iterator mi; mi; ++mi)
+    {
+        const bool is_undead = bool(mi->holiness() & MH_UNDEAD);
+        const bool is_outside = !map_masked(mi->pos(), MMT_VAULT);
+        ++total;
+        undead += is_undead;
+        outside += is_outside;
+        undead_outside += is_undead && is_outside;
+    }
+    lua_newtable(ls);
+    lua_pushinteger(ls, total);
+    lua_setfield(ls, -2, "total");
+    lua_pushinteger(ls, undead);
+    lua_setfield(ls, -2, "undead");
+    lua_pushinteger(ls, outside);
+    lua_setfield(ls, -2, "outside_vaults");
+    lua_pushinteger(ls, undead_outside);
+    lua_setfield(ls, -2, "undead_outside_vaults");
+    return 1;
 }
 
 static const struct luaL_Reg dcc_dlib[] =
@@ -1693,6 +1766,10 @@ static const struct luaL_Reg dcc_dlib[] =
 { "set_theme", dcc_set_theme_lua },
 { "reset_themes", dcc_reset_themes_lua },
 { "floor_clock_summary", dcc_floor_clock_summary_lua },
+{ "theme_mon_list", dcc_theme_mon_list_lua },
+{ "theme_quest_bump", dcc_theme_quest_bump_lua },
+{ "level_colours", dcc_level_colours_lua },
+{ "monster_counts", dcc_monster_counts_lua },
 { nullptr, nullptr }
 };
 

@@ -23,7 +23,7 @@
 #include "dcc-achieve.h"
 #include "dcc-boss.h" // dcc_place_boss
 #include "dcc-quest.h" // dcc_quest_floor_left
-#include "dcc-theme.h" // dcc_announce_theme, dcc_theme_summary
+#include "dcc-theme.h" // dcc_announce_theme, dcc_theme_for, ...
 #include "message.h"
 #include "notes.h"
 #include "player.h"
@@ -95,19 +95,24 @@ static const char *DCC_NO_FLOOR_LINE =
     "Nowhere left to drop you, so we'll take it out of your hide instead, "
     "every %d turns until you leave. Stay tuned!";
 
-/// How many turns the clock for a given floor starts with.
+/// How many turns the clock for a given floor starts with: its rule's
+/// tunable, scaled by the floor theme's clock percent if it has a theme.
 int dcc_floor_turns_for(const level_id &place)
 {
+    int turns = DCC_CLOCK_DEFAULT_TURNS;
     for (const dcc_clock_rule &rule : dcc_clock_rules)
     {
         if (place.branch == rule.branch
             && place.depth >= rule.min_depth
             && place.depth <= rule.max_depth)
         {
-            return rule.turns;
+            turns = rule.turns;
+            break;
         }
     }
-    return DCC_CLOCK_DEFAULT_TURNS;
+    if (const dcc_theme *theme = dcc_theme_for(place))
+        turns = turns * theme->clock_percent / 100;
+    return turns;
 }
 
 static int& _floor_aut_left()
@@ -299,7 +304,8 @@ static void _enter_floor_clock(bool just_created, dungeon_feature_type how)
  * The player has arrived on a level (files.cc load_level(), whenever the
  * arrival makes changes): run the floor clock's arrival logic, settle the
  * fetch quest of the floor left behind when this is a new floor, announce
- * a new connected floor's theme (dcc_announce_theme()) and place its boss
+ * a new connected floor's theme (dcc_announce_theme()), place the theme's
+ * extra monsters (dcc_apply_theme_arrival()) and the floor's boss
  * if it has one (dcc_place_boss()), then check
  * the achievements (a floor reached, a floor left early). Unlocks from one
  * arrival interrupt the player once.
@@ -329,6 +335,7 @@ void dcc_enter_floor(bool just_created, dungeon_feature_type how)
     if (just_created && is_connected_branch(here))
     {
         dcc_announce_theme();
+        dcc_apply_theme_arrival();
         dcc_place_boss();
     }
     dcc_check_achievements();

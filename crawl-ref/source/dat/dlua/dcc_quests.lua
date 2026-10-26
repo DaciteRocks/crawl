@@ -101,13 +101,34 @@ local function live(q)
          and not q.voided
 end
 
+-- The box tiers in order (dcc_box_tier_name()); a floor theme's quest tier
+-- bump moves a band's tier up this list, stopping at the last.
+DCC_QUEST_TIERS = { "Bronze", "Silver", "Gold", "Platinum", "Legendary" }
+
+-- The current floor's quest band for an absolute depth: a copy, with its
+-- tier moved up by the floor theme's bump (dcc.theme_quest_bump()).
 local function band_for(depth)
+  local found = DCC_QUEST_BANDS[#DCC_QUEST_BANDS]
   for _, band in ipairs(DCC_QUEST_BANDS) do
     if depth <= band.max_depth then
-      return band
+      found = band
+      break
     end
   end
-  return DCC_QUEST_BANDS[#DCC_QUEST_BANDS]
+  local copy = { }
+  for k, v in pairs(found) do
+    copy[k] = v
+  end
+  local bump = dcc.theme_quest_bump()
+  if bump > 0 then
+    for i, tier in ipairs(DCC_QUEST_TIERS) do
+      if tier == found.tier then
+        copy.tier = DCC_QUEST_TIERS[math.min(i + bump, #DCC_QUEST_TIERS)]
+        break
+      end
+    end
+  end
+  return copy
 end
 
 -- The kinds in the order to try them: a weighted draw without replacement.
