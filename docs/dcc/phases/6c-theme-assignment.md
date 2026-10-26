@@ -116,4 +116,21 @@ floor clock summary prints) shows "Theme: ...". D:1 said nothing.
 - `you.props` hash tables: use `get_table()` on the key as other DCC
   code does for parked clocks (`DCC_FLOOR_CLOCKS_KEY` in dcc-clock.cc).
 
-Status: not started
+## As built (deviations from the text above)
+
+- An extra read-only dlua binding, `dcc.floor_clock_summary()`, returns
+  the time/status command's floor clock line, so the smoke can check the
+  "Theme: <name>." text.
+- `dcc.set_theme()` raises an error on an unknown theme id; the smoke
+  checks the refusal.
+- `dcc_floor_clock_summary()` appends the theme (`dcc_theme_summary()`)
+  to both lines that describe a running clock on the current floor: the
+  normal "This floor collapses in N turns." line and the "no floor below"
+  retry line. The paused line names none (the player is off the
+  connected branches, where no floor has a theme).
+- Temple and Tomb floors are themed too: they are connected branches, and
+  `dcc_assign_theme()` checks only `player_in_connected_branch()` and D:1.
+  The Tomb has no safe room (`_wants_safe_room()` leaves it out), but the
+  theme call runs before that early return, so the Tomb still gets one.
+
+Status: done 2026-10-25

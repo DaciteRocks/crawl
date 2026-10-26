@@ -159,7 +159,7 @@ no `nul`, no `crawl.exe`, no `dat/des` cache changes before committing.
 | 5b | Quest giver NPC and offer flow | done 2026-10-25 |
 | 6a | Boss placement | done 2026-10-25 |
 | 6b | Boss intro, kill achievement and box | done 2026-10-25 |
-| 6c | Theme assignment and Announcer blurb | not started |
+| 6c | Theme assignment and Announcer blurb | done 2026-10-25 |
 | 6d | Themes bite: monsters, colours, clock, quest tier | not started |
 | 6e | Sponsor booth in the D:3 safe room | not started |
 | 6f | Sponsor signing: join hook and Gold box | not started |
@@ -805,7 +805,7 @@ Status: done 2026-10-25
 (`dcc-theme.cc`); every connected floor after D:1 is assigned one at
 build time (from `dcc_place_safe_room`), stored in `you.props`, announced
 on first arrival and shown in the clock summary. ~8 files.
-Status: not started
+Status: done 2026-10-25
 
 ### Phase 6d — Themes bite: monsters, colours, clock, quest tier
 `docs/dcc/phases/6d-themes-bite.md`. The theme sets the level's random

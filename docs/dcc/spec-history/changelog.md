@@ -337,3 +337,17 @@ achievement. Deviations are listed in the phase file (non-const
 ally/hostile-kill smoke checks, 6a's lines kept). The review found nothing
 to fix; three low findings were verified and dropped. Also fixed the 6a
 heading's dash, which had been written as a cp1252 byte.
+
+## 2026-10-25 — Phase 6c done
+
+Landed: four floor themes as a C++ table (`dcc-theme.cc`: crowd,
+headliners, reruns, lightning). Every connected floor after D:1 is given
+one at build time (first call in `dcc_place_safe_room()`, the builder's
+RNG, never the same as the previous assignment), kept in
+`you.props["dcc_themes"]`; a rebuilt or pre-set floor keeps its theme.
+The Announcer names it on the first arrival, with a note, and the floor
+clock summary names it. dlua `theme_for`, `theme_table`, script-only
+`set_theme` and `reset_themes`, plus `floor_clock_summary`. No trunk
+hooks. Deviations are listed in the phase file (the extra binding, the
+unknown-id check, the theme on both clock lines, Temple and Tomb themed).
+The review found nothing to fix; every finding was verified and dropped.
